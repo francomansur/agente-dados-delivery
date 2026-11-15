@@ -3,16 +3,18 @@
 The instructions are in Portuguese, the language of the data descriptions and of the answers.
 Each system prompt is fixed per node (role, schema and task), so it is cached between questions;
 the question and everything that varies go in the user message.
+
+This module knows nothing about the database: the schema description and the query result come
+in as plain text and values.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from typing import Literal
 
 from pydantic import BaseModel, Field
-
-from delivery_agent.repositories.delivery_repository import QueryResult
 
 ROLE = """\
 Você é o analista de dados de um marketplace de delivery fictício. Você responde, em português, \
@@ -88,7 +90,7 @@ def system_prompt(task: str, schema: str) -> str:
 
     Args:
         task: Instructions of the node.
-        schema: Text of ``describe_schema``.
+        schema: Description of the database, as text (the graph passes ``describe_schema()``).
 
     Returns:
         Role, schema and task, in this order.
@@ -108,11 +110,13 @@ def fix_prompt(question: str, sql: str, error: str) -> str:
     )
 
 
-def answer_prompt(question: str, result: QueryResult) -> str:
+def answer_prompt(
+    question: str, *, sql: str, columns: Sequence[str], rows: Sequence[Sequence[object]], truncated: bool
+) -> str:
     """User message for ``answer``: the question, the SQL and its result as JSON."""
     data = json.dumps(
-        {"columns": result.columns, "rows": result.rows, "truncated": result.truncated},
+        {"columns": list(columns), "rows": [list(row) for row in rows], "truncated": truncated},
         ensure_ascii=False,
     )
 
-    return f"{question_prompt(question)}\n\n<sql>\n{result.sql}\n</sql>\n\n<resultado>\n{data}\n</resultado>"
+    return f"{question_prompt(question)}\n\n<sql>\n{sql}\n</sql>\n\n<resultado>\n{data}\n</resultado>"

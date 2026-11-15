@@ -134,12 +134,14 @@ def build_graph(
         if result is None:  # the routes only reach this node after a successful execution
             return {"answer": ANSWER_FAILED, "status": "failed"}
 
-        call = model.ask(
-            system=answer_system,
-            prompt=prompts.answer_prompt(state["question"], result),
-            effort="low",
-            output_type=prompts.FinalAnswer,
+        prompt = prompts.answer_prompt(
+            state["question"],
+            sql=result.sql,
+            columns=result.columns,
+            rows=result.rows,
+            truncated=result.truncated,
         )
+        call = model.ask(system=answer_system, prompt=prompt, effort="low", output_type=prompts.FinalAnswer)
 
         if call.output is not None:
             return {"usage": call.usage, "answer": call.output.answer, "status": "answered"}
