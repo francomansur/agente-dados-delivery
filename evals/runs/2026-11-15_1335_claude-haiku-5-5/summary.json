@@ -1,0 +1,107 @@
+{
+  "date": "2026-11-15T13:38:56",
+  "model": "claude-haiku-5-5",
+  "commit": "0544208",
+  "questions": 20,
+  "reps": 3,
+  "executions": 60,
+  "planned_executions": 60,
+  "infrastructure_errors": 0,
+  "stopped_by_budget": false,
+  "accuracy": 1.0,
+  "accuracy_by_kind": {
+    "easy": 1.0,
+    "medium": 1.0,
+    "hard": 1.0,
+    "refusal": 1.0
+  },
+  "sql_ok_rate": 1.0,
+  "answer_ok_rate": 1.0,
+  "refusal_accuracy": 1.0,
+  "mean_seconds": 3.2231433333333332,
+  "mean_cost_usd": 0.00027351666666666666,
+  "total_cost_usd": 0.016411,
+  "cache_read_share": 0.9559636447465873,
+  "per_question": {
+    "Q01": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q02": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q03": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q04": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q05": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q06": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q07": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q08": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q09": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q10": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q11": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q12": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q13": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q14": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q15": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q16": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q17": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q18": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q19": {
+      "correct": 3,
+      "valid": 3
+    },
+    "Q20": {
+      "correct": 3,
+      "valid": 3
+    }
+  }
+}
