@@ -77,3 +77,23 @@ Registro curto das decisões do projeto: o contexto, o que foi decidido e as alt
   - o transporte HTTP (Streamable HTTP), montado na FastAPI, que daria acesso pela rede, mas exigiria autenticação; pelo stdio, o servidor roda na própria máquina, como um processo do cliente;
   - uma ferramenta que recebe a pergunta e chama o agente inteiro (`QuestionService.ask`), que gastaria créditos da API e repetiria o trabalho que o modelo do cliente já faz;
   - a versão 1 do SDK (`FastMCP`), que ainda recebe correções, mas não é mais a linha estável atual.
+
+## 15/11/2026: escrita só por uma ação fechada, com aprovação humana
+
+- **Contexto:** o extra EXT-01 pede uma escrita segura: registrar a avaliação de um pedido entregue, como em "avalie o pedido 1234 com nota 4: chegou frio".
+- **Decisão: uma ação fechada, não SQL de escrita.** O modelo só extrai três campos (`order_id`, `rating` e `comment`), numa saída estruturada validada com Pydantic. O `INSERT` é fixo, fica no `ReviewRepository` e recebe os valores como parâmetros.
+  - **Por quê:** um SQL de escrita gerado pelo modelo poderia apagar ou alterar qualquer coisa que o papel permitisse, e validar escrita é muito mais difícil que validar leitura. Com a ação fechada, o pior que um prompt injection consegue é propor uma avaliação, que ainda passa pelas regras e por uma pessoa.
+  - **As regras ficam no service** (`services/review_actions.py`) e leem o banco com o `agent_reader`: o pedido existe e foi entregue, ainda não tem avaliação, a nota vai de 1 a 5 e o comentário tem até 300 caracteres. O banco repete as garantias que importam: `UNIQUE` em `reviews.order_id` e `CHECK` na nota.
+  - **Um papel só para a escrita:** o `review_writer` tem `INSERT` em `reviews` e mais nada. Ele não lê nenhuma tabela, não altera nem apaga, e nem escolhe o `id`, que o banco gera.
+- **Decisão: aprovação humana antes de gravar.** O grafo pausa com o `interrupt` do LangGraph, e a resposta mostra o que será gravado. A gravação só acontece com `POST /actions/{action_id}/approve`, e `POST /actions/{action_id}/reject` descarta.
+  - **Por quê:** o modelo pode entender errado o número do pedido ou a nota, e uma escrita é mais difícil de desfazer que uma leitura. A pessoa vê exatamente o que vai para o banco antes de confirmar.
+  - **Uma decisão por ação:** as decisões passam por uma trava, e uma ação já decidida responde 409. Aprovar duas vezes não grava duas vezes, e o `UNIQUE` do banco segura até uma corrida entre dois processos.
+  - **Tudo vai para a auditoria:** a proposta, o bloqueio por uma regra, a aprovação ou a recusa, e a gravação ou a falha dela, no mesmo `logs/audit.jsonl` do SQL.
+- **O MCP continua só de leitura:** a ação de escrita não é exposta como ferramenta.
+- **Limitações aceitas:**
+  - o checkpointer fica em memória, então as ações pendentes se perdem se a api reiniciar. Um checkpointer em Postgres resolveria isso, mas exigiria outro papel com escrita em tabelas próprias;
+  - a aprovação não tem autenticação, porque a api roda só na máquina local. Em produção, aprovar exigiria um usuário autenticado e com permissão para isso, e a auditoria registraria quem aprovou.
+- **Alternativas:**
+  - deixar o modelo escrever o `INSERT` e validá-lo, o que traria de volta o risco de escrita livre;
+  - gravar direto, sem aprovação, o que tornaria qualquer erro de leitura do modelo uma escrita no banco;
+  - guardar as ações pendentes num dicionário próprio, sem o LangGraph, mais simples, mas fora do fluxo do grafo e sem o `interrupt` que o plano pedia.
