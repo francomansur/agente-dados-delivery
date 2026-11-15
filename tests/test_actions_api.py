@@ -128,17 +128,20 @@ def test_docs_show_the_action_routes_and_a_pending_answer() -> None:
 @pytest.mark.db
 def test_an_approved_review_reaches_postgres_once(
     settings: Settings,
-    repository: DeliveryRepository,
     writer_conn: psycopg.Connection,
     admin_conn: psycopg.Connection,
     unreviewed_order: int,
     tmp_path: Path,
 ) -> None:
-    reviews = ReviewActions(repository, ReviewRepository(settings), AuditLog(tmp_path / "audit.jsonl"))
+    # A repository of its own: the app closes it when the client stops.
+    repository = DeliveryRepository(settings)
+    repository.open(wait=False)
+    audit_log = AuditLog(tmp_path / "audit.jsonl")
+    reviews = ReviewActions(repository, ReviewRepository(settings), audit_log)
     draft = ReviewDraft(order_id=unreviewed_order, rating=4, comment="Chegou frio.")
-    tools = SQLTools(repository, AuditLog(tmp_path / "audit.jsonl"))
+    model = FakeModel(REVIEW, draft)
 
-    with client_for(FakeModel(REVIEW, draft), reviews, tools=tools, repository=repository) as client:
+    with client_for(model, reviews, tools=SQLTools(repository, audit_log), repository=repository) as client:
         pending = client.post("/questions", json=REQUEST).json()
         before = admin_conn.execute("SELECT count(*) FROM reviews WHERE order_id = %s", (unreviewed_order,))
         written_before = before.fetchone()
