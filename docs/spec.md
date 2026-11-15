@@ -1,21 +1,13 @@
 # Spec: agente-dados-delivery
 
-> Versão 2, de 15/11/2026. Escrita antes do código; a implementação só começa depois da revisão do Franco.
-> Há uma seção por etapa do plano. Cada requisito tem um ID (por exemplo, SEC-02), e a seção 7 liga cada ID ao teste ou à pergunta da avaliação que o comprova.
-
-## Decisões pendentes
-
-| # | Tema | O plano diz | Proposta |
-|---|------|-------------|----------|
-| D1 | Rota e campos da API | `POST /perguntas` devolve `{resposta, sql, linhas}` | `POST /questions` devolve `{answer, sql, rows, ...}`, aplicando a regra de idioma do próprio plano (identificadores em inglês) |
-| D2 | As 20 perguntas da avaliação | 20 perguntas com resposta calculada por SQL escrito à mão | 16 com SQL de referência e 4 em que o certo é recusar, para testar o passo 1 do fluxo e a segurança. Alternativa: 24 perguntas, sendo 20 com SQL e 4 recusas |
-| D3 | Repetições da avaliação | Não define; pede só que uma oscilação isolada não seja tratada como erro | 3 repetições por pergunta (60 execuções por rodada). Estimativa: menos de US$ 0,50 por rodada com o Haiku 5.5; a primeira rodada mede o valor real |
+> Versão 3, de 15/11/2026, aprovada com os ajustes da revisão. Há uma seção por etapa do plano. Cada requisito tem um ID (por exemplo, SEC-02), e a seção 7 liga cada ID ao teste ou à pergunta da avaliação que o comprova.
+> Regras de idioma, estilo de código e versionamento: [`AGENTS.md`](../AGENTS.md). Decisões e alternativas: [`decisoes.md`](decisoes.md).
 
 ## 1. Visão geral
 
 **O que é:** uma API que responde, em português, perguntas de negócio sobre a base fictícia de um marketplace de delivery. Para cada pergunta, o agente gera um SQL, valida, executa no Postgres com um usuário somente leitura e responde mostrando o SQL e as linhas usadas.
 
-**Stack:** Python 3.12, LangGraph (fluxo), FastAPI (API), SDK oficial `anthropic` com o Claude Haiku 5.5, PostgreSQL em Docker Compose, psycopg 3, pytest, ruff e mypy.
+**Stack:** Python 3.12, LangGraph (fluxo), FastAPI (API), SDK oficial `anthropic` com o Claude Haiku 5.5, PostgreSQL em Docker Compose, psycopg 3, sqlglot, pytest, ruff e mypy.
 
 **Fora do escopo:**
 - escrita no banco, exceto o extra EXT-01;
@@ -32,21 +24,7 @@ flowchart LR
     API --> LOG["logs/audit.jsonl"]
 ```
 
-### 1.1 Convenções de idioma
-
-Uma língua por camada. A regra vai para a seção "Convenções" do README.
-- **Inglês nos identificadores:** pacote, módulos, classes, funções, variáveis, docstrings, mensagens de commit, tabelas, colunas, rotas e campos da API, variáveis de ambiente e códigos de status (`delivered`, `credit_card`).
-- **Português no conteúdo para pessoas:** dados do negócio (restaurantes, categorias, bairros, itens, comentários), respostas do agente, README, esta spec, `docs/decisoes.md` e descrições de tabelas e colunas, via `COMMENT ON`.
-
-O código que já existe em `src/agente_delivery` foi escrito em português, antes dessa regra. **Tudo o que for reaproveitado será convertido para inglês:** o pacote vira `delivery_agent`, `executar_sql` vira `execute_sql`, `descrever_schema` vira `describe_schema`, a tabela `pedidos` vira `orders`, e assim por diante. Os nomes em português citados no plano seguem a mesma regra: `clientes_publico` vira `customers_public`, e o teste de permissão usa `SELECT phone FROM customers`.
-
-| ID | Requisito |
-|----|-----------|
-| CNV-01 | Nenhum identificador em português no código, no schema ou na API. |
-| CNV-02 | Toda tabela, view e coluna tem `COMMENT ON` em português. |
-| CNV-03 | A resposta do agente traduz os códigos para o português (por exemplo, `credit_card` vira "cartão de crédito"). |
-
-### 1.2 Qualidade de código
+### 1.1 Qualidade de código
 
 | ID | Requisito |
 |----|-----------|
@@ -54,10 +32,8 @@ O código que já existe em `src/agente_delivery` foi escrito em português, ant
 | QLT-02 | `ruff check` e `ruff format --check` limpos, com regras de estilo, imports, bugs comuns e docstrings no estilo Google. |
 | QLT-03 | Pydantic na entrada de `execute_sql` (e das ferramentas do MCP, se o extra entrar), nas saídas estruturadas do modelo e nas configurações, via pydantic-settings. |
 | QLT-04 | pytest com cobertura mínima de 85% em `src/`. |
-| QLT-05 | `AGENTS.md` explica como rodar, testar e trabalhar com esta spec, além das regras de idioma e de estilo. `docs/decisoes.md` registra cada decisão com contexto e alternativas. Um commit por passo, no padrão Conventional Commits e em inglês, direto na `main`, com uma tag ao fim de cada etapa. |
-| QLT-06 | Espaçamento vertical dentro das funções, conforme a regra do `AGENTS.md`: linha em branco antes e depois de cada bloco `if`, `for`, `while`, `try` e `with` (exceto quando o bloco é o primeiro ou o último comando de onde está), antes de um `return` que vem depois de outros comandos e entre etapas lógicas, mas nunca duas seguidas. |
 
-### 1.3 Estrutura
+### 1.2 Estrutura
 
 ```
 src/delivery_agent/   configurações, validador, executor, auditoria, fluxo, API e gerador dos dados
@@ -116,15 +92,15 @@ Códigos:
 
 ### 2.4 Validador de SQL (camada 3)
 
-A lógica do validador atual é reaproveitada, convertida para inglês e adaptada ao SQL do Postgres. Ele não é a barreira principal, que é o banco (camadas 1 e 2). O papel dele é recusar cedo e explicar ao modelo o que corrigir.
+O validador usa o sqlglot, com o dialeto do Postgres, para analisar o SQL; o analisador léxico feito à mão para o SQLite sai (ver `decisoes.md`). O SQL executado é o texto original, só com o `LIMIT` acrescentado: o sqlglot analisa, mas não reescreve. O validador não é a barreira principal, que é o banco (camadas 1 e 2). O papel dele é recusar cedo e explicar ao modelo o que corrigir.
 
 | ID | Requisito |
 |----|-----------|
-| VAL-01 | Aceita um único comando, que começa com `SELECT` ou `WITH`. Um `;` no final é tolerado. |
-| VAL-02 | Recusa palavras de escrita ou de administração que apareçam fora de strings e comentários: `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `DROP`, `ALTER`, `CREATE`, `TRUNCATE`, `GRANT`, `REVOKE`, `COPY`, `CALL`, `DO`, `EXECUTE`, `PREPARE`, `LOCK`, `SET`, `RESET`, `VACUUM`, `ANALYZE`, `REFRESH`, `LISTEN`, `NOTIFY` e `INTO` (`SELECT ... INTO` cria uma tabela). |
-| VAL-03 | Reconhece as formas de texto do Postgres para não ser enganado: `'...'`, `E'...'`, `U&'...'`, `$$...$$` e `$tag$...$tag$`, `"identificador"` (cujo conteúdo continua sendo checado), `--` e `/* */` aninhado. Recusa identificador com escape Unicode (`U&"..."`). |
+| VAL-01 | Aceita uma única instrução, e ela precisa ser uma consulta de leitura: `SELECT`, `WITH ... SELECT` ou uma combinação delas com `UNION`, `INTERSECT` ou `EXCEPT`. Um `;` no final é tolerado. |
+| VAL-02 | Recusa qualquer escrita ou comando administrativo em qualquer ponto da árvore, inclusive dentro de um `WITH` (`WITH d AS (DELETE ...) SELECT ...`), além de `SELECT ... INTO`, `FOR UPDATE` e `FOR SHARE` e de comandos que o sqlglot não reconhece. |
+| VAL-03 | Strings, comentários e identificadores seguem as regras do Postgres (`E'...'`, `$$...$$`, `$tag$...$tag$`, `"identificador"`, `--` e `/* */` aninhado), interpretadas pelo sqlglot. Identificador com escape Unicode (`U&"..."`), que o sqlglot não decodifica, é recusado antes da análise. |
 | VAL-04 | Recusa funções administrativas ou com efeito colateral, mesmo dentro de um `SELECT`: `set_config`, `pg_sleep*`, `pg_read_*`, `pg_ls_*`, `pg_stat_file`, `lo_*`, `dblink*`, `pg_terminate_backend`, `pg_cancel_backend`, `pg_reload_conf` e `pg_advisory_*`. |
-| VAL-05 | Se a consulta não tem `LIMIT` no nível externo, o validador acrescenta `LIMIT 101` numa linha nova, para não cair dentro de um comentário. A execução devolve no máximo 100 linhas e marca `truncated`. |
+| VAL-05 | Se a consulta não tem `LIMIT` (ou `FETCH FIRST`) no nível externo, o validador acrescenta `LIMIT 101` numa linha nova, para não cair dentro de um comentário. A execução devolve no máximo 100 linhas e marca `truncated`. |
 | VAL-06 | Cada recusa tem uma mensagem em português com o motivo e o que fazer, clara o bastante para o modelo corrigir o SQL. |
 
 ### 2.5 Execução e descrição da base
@@ -133,9 +109,10 @@ A lógica do validador atual é reaproveitada, convertida para inglês e adaptad
 |----|-----------|
 | EXE-01 | `execute_sql(sql)` recebe a entrada validada por Pydantic, passa pelo validador, executa com o `agent_reader` numa transação somente leitura e devolve colunas, linhas, `truncated` e a duração. `NUMERIC` vira número, e datas viram texto ISO. |
 | EXE-02 | Cada tipo de erro vira uma exceção própria (`SQLRejected`, `QueryTimeout` ou `ExecutionError`, todas filhas de `SQLError`), com a mensagem do Postgres. |
-| SCH-01 | `describe_schema()` roda com o `agent_reader` e mostra só o que ele pode ler: tabelas e views, colunas, tipos, descrições (`COMMENT ON`) e exemplos de valores. Colunas de texto com até 15 valores distintos mostram todos; as outras colunas de texto mostram 3 exemplos; datas mostram o mínimo e o máximo. Não mostra contagens de linhas, que poderiam entregar respostas da avaliação. |
-| SCH-02 | A saída de `describe_schema()` é determinística: a mesma base gera o mesmo texto, byte a byte, para o cache de prompt funcionar. |
-| SCH-03 | A saída termina com o glossário de métricas abaixo, que também fecha as ambiguidades das perguntas da avaliação. |
+| SCH-01 | `describe_schema()` roda com o `agent_reader` e mostra só o que ele pode ler: tabelas e views, colunas, tipos, descrições e exemplos de valores. Colunas de texto com até 15 valores distintos mostram todos; as outras colunas de texto mostram 3 exemplos; datas mostram o mínimo e o máximo. Não mostra contagens de linhas, que poderiam entregar respostas da avaliação. |
+| SCH-02 | Toda tabela, view e coluna tem descrição em português, via `COMMENT ON`. |
+| SCH-03 | A saída de `describe_schema()` é determinística: a mesma base gera o mesmo texto. |
+| SCH-04 | A saída termina com o glossário de métricas abaixo, que também fecha as ambiguidades das perguntas da avaliação. |
 
 Glossário:
 - **Pedidos**, sem qualificação: todos os pedidos, inclusive os cancelados. **Pedidos entregues:** `status = 'delivered'`.
@@ -202,14 +179,12 @@ flowchart TD
 | GRA-02 | Uma pergunta que a base não responde termina em `refuse` com `status = refused` e uma explicação do que falta. Exemplos: lucro líquido e telefone de cliente. |
 | GRA-03 | Um erro de validação ou de execução volta para `fix_sql` com a mensagem do erro, no máximo 2 vezes. Depois disso, o fluxo termina em `give_up` com `status = failed` e uma mensagem clara. |
 | GRA-04 | A resposta traz o texto, o SQL executado e as linhas. Os números do texto vêm das linhas: as contas ficam no SQL, e o nó `answer` não calcula nada. |
-| GRA-05 | Cada nó que chama o modelo usa um prefixo fixo (instruções do nó, schema e glossário) com cache de prompt e um effort fixo, para o cache valer de uma pergunta para outra. |
+| GRA-05 | A resposta traduz os códigos para o português (por exemplo, `credit_card` vira "cartão de crédito"). |
 | GRA-06 | Modelo, chave e limites vêm do `.env`, lidos com pydantic-settings, e o padrão é `LLM_MODEL=claude-haiku-5-5`. |
 | GRA-07 | A pergunta do usuário vai só na mensagem do usuário, nunca no system prompt, e as instruções mandam tratá-la como dado, não como ordem. |
-| GRA-08 | Os casos-limite do modelo não quebram o fluxo: `stop_reason = refusal` vira `status = refused`, `max_tokens` vira `status = failed`, e uma resposta vinda de um modelo diferente do pedido é tratada como erro. |
+| GRA-08 | Os casos-limite do modelo não quebram o fluxo: `stop_reason = refusal` vira `status = refused`, e `max_tokens` vira `status = failed`. |
 
 ### 3.2 API
-
-Os nomes abaixo seguem a proposta D1.
 
 | ID | Requisito |
 |----|-----------|
@@ -220,7 +195,7 @@ Os nomes abaixo seguem a proposta D1.
 
 ## 4. Etapa 3: avaliação
 
-As 20 perguntas, conforme a proposta D2: 16 respondíveis (6 fáceis, 6 médias e 4 difíceis) e 4 recusas. Uma recusa conta como acerto quando o agente recusa, em vez de inventar uma resposta.
+São 20 perguntas: 16 respondíveis (6 fáceis, 6 médias e 4 difíceis) e 4 recusas. Uma recusa conta como acerto quando o agente recusa, em vez de inventar uma resposta.
 
 | # | Pergunta | Tipo |
 |---|----------|------|
@@ -253,22 +228,19 @@ As perguntas que pedem um nome também pedem o número (por exemplo, "e de quant
 | EVA-02 | A correção é automática e faz duas checagens por pergunta respondível. **SQL certo:** os valores do resultado de referência aparecem nas linhas devolvidas pelo agente. **Resposta certa:** os mesmos valores aparecem no texto. A pergunta só conta como acerto se passar nas duas. Inteiros precisam ser exatos; decimais toleram arredondamento (até 1% ou 0,05). O texto aceita o formato brasileiro (R$ 1.234,56 e 12,5%). Textos são comparados sem acento e sem maiúsculas, códigos valem pelo rótulo em português (`credit_card` = "cartão de crédito"), e a ordem é conferida nos rankings. Nas recusas, só `status = refused` conta como acerto: um `failed` não vale como recusa. |
 | EVA-03 | `make eval` chama a mesma função que a API usa (com `source = eval`), roda as 20 perguntas com 3 repetições por padrão e guarda, para cada execução, status, checagens, SQL, linhas, texto, tokens, custo, tempo e tentativas. O custo sai do `usage` real, com os preços de cache. |
 | EVA-04 | Um erro de infraestrutura (timeout, erro da API ou banco fora do ar) não conta como erro do modelo. A execução é repetida uma vez e, se falhar de novo, vai para `errors.jsonl` e fica fora da taxa. O resumo mostra quantas execuções valeram. |
-| EVA-05 | O resumo mostra a taxa de acerto (a média das taxas de cada pergunta) com um intervalo de confiança aproximado de 95%, calculado sobre as 20 perguntas e não sobre as 60 execuções. Mostra também as taxas de SQL certo e de resposta certa, o acerto nas recusas e o tempo e o custo médios por pergunta. |
+| EVA-05 | O resumo mostra a taxa de acerto (a média das taxas de cada pergunta), as taxas de SQL certo e de resposta certa, o acerto nas recusas e o tempo e o custo médios por pergunta. |
 | EVA-06 | Cada rodada fica salva em `evals/runs/<data-hora>_<modelo>/`, com `summary.json`, `results.jsonl` e `errors.jsonl`, e entra no git. |
-| EVA-07 | `make compare` compara a última rodada com a anterior. Mostra a variação da taxa geral com um intervalo de 95% pareado por pergunta e avisa "dentro do ruído" quando o intervalo inclui zero. Lista as perguntas que melhoraram ou pioraram, mas só marca uma pergunta quando a taxa dela muda 50 pontos percentuais ou mais (com 3 repetições, 2 de 3), para não tratar uma oscilação isolada como erro. |
+| EVA-07 | `make compare` compara a última rodada com a anterior: mostra a variação da taxa de acerto e lista as perguntas que melhoraram ou pioraram. Uma pergunta só é marcada quando o resultado dela muda em pelo menos 2 das 3 repetições, para não tratar uma oscilação isolada como erro. |
 | EVA-08 | Antes de chamar a API, o script mostra a estimativa de custo e só segue com confirmação. |
 | EVA-09 | A correção é testada antes da primeira rodada: as respostas de referência passam, e não passam uma resposta vazia, um "não sei", um número errado mas plausível e um `failed` numa recusa. |
-
-Com 20 perguntas, o intervalo de confiança fica largo, algo como 10 a 15 pontos para cada lado. O README mostra a taxa junto com o intervalo.
 
 ## 5. Etapa 3: README e documentação
 
 | ID | Requisito |
 |----|-----------|
-| RDM-01 | O README, em português, traz: o que o projeto faz, como rodar (`cp .env.example .env` e `docker compose up`), um exemplo de chamada, o diagrama do fluxo, as camadas de segurança, o resultado da avaliação (data, modelo, taxa com intervalo, tempo e custo por pergunta), o badge do CI, o GIF, a seção "Convenções" e as limitações. |
+| RDM-01 | O README, em português, traz: o que o projeto faz, como rodar (`cp .env.example .env` e `docker compose up`), um exemplo de chamada, o diagrama do fluxo gerado pelo LangGraph, as camadas de segurança, o resultado da avaliação (data, modelo, taxa de acerto, tempo e custo por pergunta), o badge do CI, o GIF, a seção "Convenções" e as limitações. |
 | RDM-02 | A seção "Riscos e como mitiguei" percorre a lista OWASP Top 10 para aplicações com LLM e diz, para cada item, como o projeto mitiga o risco ou por que ele não se aplica. |
-| RDM-03 | O diagrama do README é gerado pelo LangGraph a partir do grafo compilado. Um teste falha se o grafo mudar e o README não. |
-| RDM-04 | O repositório não usa nome nem logo de nenhuma empresa de delivery: a base é de um marketplace fictício. |
+| RDM-03 | O repositório não usa nome nem logo de nenhuma empresa de delivery: a base é de um marketplace fictício. |
 
 ## 6. Extras (à noite, só depois do corte das 18h)
 
@@ -283,17 +255,12 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 
 | ID | Prova |
 |----|-------|
-| CNV-01 | `test_schema.py::test_schema_matches_spec` (db) e revisão do código |
-| CNV-02 | `test_schema.py::test_every_table_and_column_has_comment` (db) |
-| CNV-03 | Avaliação: Q04 |
 | QLT-01, QLT-02 | Jobs de mypy e ruff no CI |
 | QLT-03 | `test_executor.py::test_input_is_validated` e `test_settings.py` |
 | QLT-04 | `--cov-fail-under=85` no CI |
-| QLT-05 | Revisão do `AGENTS.md`, do `docs/decisoes.md` e do histórico do git |
-| QLT-06 | Revisão do código, já que o `ruff format` não cria essas linhas |
 | DB-01 | `test_schema.py::test_schema_matches_spec` (db) |
 | DB-02 | `test_seed.py::test_same_seed_same_data`, `test_counts_match_spec` e `test_personal_data_is_fictional` |
-| DB-03 | `test_seed.py::test_integrity` (db) |
+| DB-03 | `test_schema.py::test_integrity` (db) |
 | DCK-01 | `test_api.py::test_health` (db) e o job do CI que sobe o Compose |
 | DCK-02 a DCK-04 | Revisão do `docker-compose.yml`, dos Dockerfiles e do `.gitignore` |
 | SEC-01, SEC-04, SEC-05 | `test_db_security.py::test_agent_cannot_read_customer_pii`, `test_agent_cannot_write` e `test_public_view_has_no_pii` (db) |
@@ -301,22 +268,21 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 | SEC-03 | `test_db_security.py::test_set_config_is_revoked` e `test_transaction_is_read_only` (db) |
 | VAL-01 a VAL-06 | `test_sql_validator.py`, com casos para cada regra, inclusive tentativas de burlar com strings, comentários e aspas |
 | EXE-01, EXE-02 | `test_executor.py` (db) |
-| SCH-01 a SCH-03 | `test_schema.py::test_shows_only_allowed_objects`, `test_is_deterministic` e `test_includes_examples_and_glossary` (db) |
+| SCH-01 a SCH-04 | `test_schema.py::test_shows_only_allowed_objects`, `test_every_table_and_column_has_comment`, `test_is_deterministic` e `test_includes_examples_and_glossary` (db) |
 | AUD-01 | `test_audit.py::test_every_execution_is_logged` (db) |
 | CI-01, CI-02 | `.github/workflows/ci.yml` passando no GitHub, sem a chave da Anthropic |
 | GRA-01 | `test_graph.py::test_out_of_scope_is_refused_without_sql` e avaliação: Q20 |
 | GRA-02 | Avaliação: Q17, Q18 e Q19 |
 | GRA-03 | `test_graph.py::test_sql_error_is_fixed` e `test_gives_up_after_two_fixes` |
 | GRA-04 | `test_api.py::test_question_returns_sql_and_rows` e a checagem "resposta certa" da avaliação |
-| GRA-05 | `test_llm.py::test_prefix_is_stable` e leitura de cache maior que zero no resumo da avaliação |
+| GRA-05 | Avaliação: Q04 |
 | GRA-06 | `test_settings.py` |
 | GRA-07 | `test_llm.py::test_question_is_not_in_system_prompt` |
-| GRA-08 | `test_graph.py::test_model_refusal`, `test_max_tokens` e `test_unexpected_model` |
+| GRA-08 | `test_graph.py::test_model_refusal` e `test_max_tokens` |
 | API-01 a API-04 | `test_api.py` |
 | EVA-01, EVA-03, EVA-05 | A rodada registrada em `evals/runs/` e no README |
 | EVA-02, EVA-09 | `test_eval_grading.py` |
 | EVA-04, EVA-08 | `test_eval_runner.py::test_infra_error_is_not_scored` e `test_asks_before_spending` |
 | EVA-06, EVA-07 | `test_eval_compare.py` |
-| RDM-01, RDM-02, RDM-04 | Revisão do README antes de publicar |
-| RDM-03 | `test_graph.py::test_readme_diagram_is_up_to_date` |
+| RDM-01 a RDM-03 | Revisão do README antes de publicar |
 | EXT-01, EXT-02 | Testes próprios, se os extras entrarem |

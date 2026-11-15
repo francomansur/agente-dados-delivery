@@ -14,6 +14,8 @@ Uma língua por camada:
 - **Inglês nos identificadores:** pacote, módulos, classes, funções, variáveis, docstrings, mensagens de commit, tabelas, colunas, rotas e campos da API, variáveis de ambiente e códigos de status (`delivered`, `credit_card`, `invalid_format`).
 - **Português no conteúdo para pessoas:** dados do negócio, respostas do agente, mensagens que chegam ao usuário ou ao modelo, README, spec, `docs/decisoes.md` e descrições de tabelas e colunas (`COMMENT ON`).
 
+O código escrito antes dessa regra (`src/agente_delivery`) está em português e é convertido para inglês quando reaproveitado.
+
 ## Estilo de código
 
 - `ruff format` e `ruff check` limpos, e `mypy --strict` sem erros.
