@@ -1,7 +1,7 @@
 # Daily shortcuts. In the CI, run them with BIN= to use the tools on the PATH.
 BIN ?= .venv/bin/
 
-.PHONY: install db-up db-down db-reset lint format typecheck test check
+.PHONY: install db-up db-down db-reset lint format typecheck test check eval compare
 
 install:
 	python3.12 -m venv .venv
@@ -32,3 +32,9 @@ test:
 	$(BIN)pytest --cov
 
 check: lint typecheck test
+
+eval:
+	$(BIN)python -m evals.run
+
+compare:
+	$(BIN)python -m evals.compare

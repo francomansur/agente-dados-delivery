@@ -36,12 +36,15 @@ where = ["src"]
 [tool.ruff]
 line-length = 110
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "tests", "."]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "D", "S", "SIM", "RUF", "N"]
 # N818: the error names follow the spec (SQLRejected, QueryTimeout).
 ignore = ["D105", "D107", "N818"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["delivery_agent", "evals"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -49,15 +52,18 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D", "S101", "S105", "S106", "S608"]
 "src/delivery_agent/seed.py" = ["S311"]
+# The questions and reference SQL are data: splitting them mid-sentence would hurt more than help.
+"evals/cases.py" = ["E501"]
 
 [tool.mypy]
 strict = true
 python_version = "3.12"
-files = ["src"]
+files = ["src", "evals"]
 plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-ra --strict-markers"
 markers = ["db: needs the Postgres of the Compose (make db-up)"]
 
