@@ -63,3 +63,17 @@ Registro curto das decisões do projeto: o contexto, o que foi decidido e as alt
   - Gradio ou Streamlit, rápidos de montar em Python, mas seriam um segundo app, e o plano tinha deixado o Gradio de fora;
   - React com Vite, que exigiria Node e uma etapa de build para uma tela pequena;
   - mostrar os passos do agente ao vivo, com SSE, que fica como extra para depois.
+
+## 15/11/2026: servidor MCP somente leitura
+
+- **Contexto:** o extra EXT-02 pede um servidor MCP com as ferramentas do agente. Com ele, o Claude Code, o Claude Desktop e outros clientes consultam a base direto, e quem escreve o SQL é o modelo do cliente.
+- **Decisão:** um servidor com o SDK oficial de MCP para Python (`mcp` 2.3, classe `MCPServer`), pelo stdio, com duas ferramentas marcadas como somente leitura: `describe_schema` e `execute_sql`.
+  - As duas chamam o mesmo `SQLTools` da API, então valem a validação da entrada, o validador, o usuário somente leitura e a auditoria, com `source` igual a `mcp`. Um teste confere que o pacote `mcp/` não importa o repository nem o driver do banco.
+  - A montagem do acesso ao banco (pool somente leitura, auditoria e `SQLTools`) saiu do `main.py` para uma função só, `open_sql_tools`, em `assembly.py`, que a API e o MCP usam.
+  - Um SQL recusado ou com erro vira um `ToolError`, com a mensagem em português, para o modelo do cliente corrigir a consulta. Os outros erros chegam ao cliente sem os detalhes internos.
+  - O parâmetro `--directory` existe porque o Claude Desktop inicia o servidor numa pasta própria, e o `.env` e a pasta `logs/` são relativos à pasta atual.
+- **Só leitura:** a spec previa também a ação de escrita, marcada como destrutiva. O MCP expõe só leitura, e a ação de escrita (EXT-01) não está exposta: o Franco decide sobre ela depois de ver o MCP pronto. As marcações de somente leitura são avisos para o cliente, não uma barreira; quem garante a leitura são o validador e o banco.
+- **Alternativas:**
+  - o transporte HTTP (Streamable HTTP), montado na FastAPI, que daria acesso pela rede, mas exigiria autenticação; pelo stdio, o servidor roda na própria máquina, como um processo do cliente;
+  - uma ferramenta que recebe a pergunta e chama o agente inteiro (`QuestionService.ask`), que gastaria créditos da API e repetiria o trabalho que o modelo do cliente já faz;
+  - a versão 1 do SDK (`FastMCP`), que ainda recebe correções, mas não é mais a linha estável atual.
