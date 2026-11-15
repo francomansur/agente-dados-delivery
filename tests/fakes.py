@@ -1,20 +1,23 @@
-"""Test doubles for the language model, the SQL tools and the repository."""
+"""Test doubles for the language model, the SQL tools, the repositories and the review action."""
 
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
-from delivery_agent.core.audit import QueryContext
-from delivery_agent.core.errors import DatabaseUnavailable
+from delivery_agent.core.audit import ActionContext, QueryContext
+from delivery_agent.core.errors import DatabaseUnavailable, ReviewBlocked
 from delivery_agent.llm.client import Effort, ModelCall, TokenUsage
-from delivery_agent.llm.prompts import FinalAnswer, SQLDraft, Understanding
-from delivery_agent.repositories.delivery_repository import Cell, QueryResult, Relation
+from delivery_agent.llm.prompts import FinalAnswer, ReviewDraft, SQLDraft, Understanding
+from delivery_agent.repositories.delivery_repository import Cell, OrderReviewState, QueryResult, Relation
+from delivery_agent.services.review_actions import ReviewProposal
 from delivery_agent.services.sql_validator import validate_sql
 
 USAGE = TokenUsage(input_tokens=100, output_tokens=50, cache_read_tokens=1000, calls=1)
 QUERY = Understanding(intent="query", reason="Dá para responder com os pedidos.")
 COUNT_SQL = SQLDraft(sql="SELECT count(*) AS n FROM orders")
 DONE = FinalAnswer(answer="Há 1 pedido.")
+REVIEW = Understanding(intent="register_review", reason="A pessoa quer avaliar um pedido.")
+REVIEW_DRAFT = ReviewDraft(order_id=1234, rating=4, comment="Chegou frio.")
 
 
 @dataclass
@@ -129,3 +132,57 @@ class FakeRepository:
 
     def value_range(self, relation: str, column: str) -> tuple[Cell, Cell]:
         return "2026-01-01 00:05:00", "2026-10-31 23:55:00"
+
+
+class FakeReviewDesk:
+    """Stands in for ``ReviewActions`` in the graph: records each step and every write.
+
+    ``blocked`` makes ``propose`` refuse with that message; ``write_error`` makes ``write`` raise.
+    """
+
+    def __init__(self, *, blocked: str | None = None, write_error: Exception | None = None) -> None:
+        self.blocked = blocked
+        self.write_error = write_error
+        self.steps: list[str] = []
+        self.written: list[ReviewProposal] = []
+
+    def propose(self, draft: ReviewDraft, context: ActionContext) -> ReviewProposal:
+        if self.blocked is not None:
+            raise ReviewBlocked(self.blocked)
+
+        self.steps.append("proposed")
+
+        return ReviewProposal(order_id=draft.order_id or 0, rating=draft.rating or 1, comment=draft.comment)
+
+    def decide(self, proposal: ReviewProposal, context: ActionContext, *, approved: bool) -> None:
+        self.steps.append("approved" if approved else "rejected")
+
+    def write(self, proposal: ReviewProposal, context: ActionContext) -> None:
+        if self.write_error is not None:
+            raise self.write_error
+
+        self.written.append(proposal)
+
+
+@dataclass
+class FakeOrders:
+    """Stands in for the read of ``DeliveryRepository`` that the review rules use."""
+
+    orders: dict[int, OrderReviewState] = field(default_factory=dict)
+
+    def order_review_state(self, order_id: int) -> OrderReviewState | None:
+        return self.orders.get(order_id)
+
+
+@dataclass
+class FakeReviewWriter:
+    """Stands in for ``ReviewRepository``: records every insert, or raises ``error``."""
+
+    error: Exception | None = None
+    inserted: list[tuple[int, int, str | None]] = field(default_factory=list)
+
+    def insert(self, *, order_id: int, rating: int, comment: str | None) -> None:
+        if self.error is not None:
+            raise self.error
+
+        self.inserted.append((order_id, rating, comment))

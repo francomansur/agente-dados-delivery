@@ -17,17 +17,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from delivery_agent.core.errors import DatabaseUnavailable, MissingAPIKey
 from delivery_agent.services.graph import Status
-from delivery_agent.services.question_service import AgentAnswer, QuestionService
+from delivery_agent.services.question_service import AgentAnswer, PendingAction, QuestionService
 
-# Fields of every answer. The technical details (sql, attempts, usage and duration_ms) only come
-# with include_details=true.
-SUMMARY_FIELDS = {"request_id", "status", "answer", "columns", "rows", "truncated"}
+# Fields of every answer, plus the pending action when there is one. The technical details (sql,
+# attempts, usage and duration_ms) only come with include_details=true.
+SUMMARY_FIELDS = {"request_id", "status", "answer", "columns", "rows", "truncated", "action"}
 
 # The example with every field is the one that AgentAnswer documents, and the default one is its
 # summary, both with the fields in the order of the answer (the JSON schema sorts them).
 _EXAMPLE: dict[str, Any] = AgentAnswer.model_json_schema()["examples"][0]
-DETAILED_EXAMPLE = {name: _EXAMPLE[name] for name in AgentAnswer.model_fields}
-SUMMARY_EXAMPLE = {name: _EXAMPLE[name] for name in AgentAnswer.model_fields if name in SUMMARY_FIELDS}
+DETAILED_EXAMPLE = {name: _EXAMPLE[name] for name in AgentAnswer.model_fields if name in _EXAMPLE}
+SUMMARY_EXAMPLE = {name: value for name, value in DETAILED_EXAMPLE.items() if name in SUMMARY_FIELDS}
 
 # The web page to try the agent: index.html here, and its CSS and JavaScript under /static.
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -67,11 +67,17 @@ class AnswerSummary(BaseModel):
     model_config = ConfigDict(json_schema_extra={"examples": [SUMMARY_EXAMPLE]})
 
     request_id: str
-    status: Status = Field(description="answered (respondida), refused (recusada) ou failed (falhou).")
+    status: Status = Field(
+        description="answered (respondida), refused (recusada), failed (falhou) ou pending_approval "
+        "(aguardando aprovação)."
+    )
     answer: str = Field(description="Resposta em português.")
     columns: list[str]
     rows: list[list[str | int | float | bool | None]] = Field(description="No máximo 100 linhas.")
     truncated: bool = Field(description="true quando o resultado tinha mais de 100 linhas.")
+    action: PendingAction | None = Field(
+        default=None, description="Só numa ação que espera aprovação (pending_approval)."
+    )
 
 
 class Health(BaseModel):
@@ -110,6 +116,8 @@ def get_services(request: Request) -> AppServices:
         502: {"description": "A API do modelo falhou."},
         503: {"description": "Falta a chave da API, ou o banco de dados está fora do ar."},
     },
+    # The pending action is left out of the answers that have none, instead of coming as null.
+    response_model_exclude_unset=True,
 )
 def ask_question(
     request: QuestionRequest,
@@ -131,7 +139,7 @@ def ask_question(
     if include_details:
         return answer
 
-    return AnswerSummary.model_validate(answer.model_dump(include=SUMMARY_FIELDS))
+    return AnswerSummary.model_validate(answer.model_dump(include=SUMMARY_FIELDS, exclude_unset=True))
 
 
 @router.get("/", include_in_schema=False)

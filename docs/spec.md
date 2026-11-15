@@ -145,6 +145,7 @@ Glossário:
 | ID | Requisito |
 |----|-----------|
 | AUD-01 | Todo SQL que chega ao executor, aprovado ou recusado, gera uma linha em `logs/audit.jsonl` com `timestamp` (UTC), `request_id`, `source` (`api`, `eval` ou `mcp`), `question`, `sql`, `status` (`ok`, `rejected`, `error` ou `timeout`), `duration_ms`, `row_count` e `error`. No Docker, `logs/` fica montada no host e fora do git. |
+| AUD-02 | Cada etapa da ação de escrita (EXT-01) gera uma linha no mesmo arquivo, com `timestamp`, `request_id`, `source`, `question`, `action_id`, `action` (`register_review`), `event` (`proposed`, `blocked`, `approved`, `rejected`, `written` ou `write_failed`), `order_id`, `rating`, `comment` e `error`. |
 
 ### 2.7 CI
 
@@ -164,6 +165,12 @@ flowchart TD
     S([pergunta]) --> U[understand]
     U -- "query" --> G[generate_sql]
     U -- "out_of_scope ou not_answerable" --> R[refuse]
+    U -- "register_review" --> D[draft_review]
+    D --> C[check_review]
+    C -- "regra falhou" --> Z
+    C -- "ok" --> W[wait_for_approval]
+    W -- "aprovada" --> WR[write_review]
+    W -- "recusada" --> DR[discard_review]
     G --> V[validate]
     V -- "ok" --> E[execute]
     V -- "erro" --> F[fix_sql]
@@ -179,7 +186,7 @@ flowchart TD
 
 | Nó | O que faz | Chama o modelo? |
 |----|-----------|-----------------|
-| `understand` | Classifica a pergunta como `query`, `out_of_scope` ou `not_answerable` e escreve o motivo, em português. | Sim: effort `low`, saída estruturada |
+| `understand` | Classifica a pergunta como `query`, `out_of_scope`, `not_answerable` ou `register_review` e escreve o motivo, em português. | Sim: effort `low`, saída estruturada |
 | `generate_sql` | Escreve uma única consulta a partir da pergunta, do schema e do glossário. | Sim: effort `medium`, saída estruturada |
 | `validate` | Roda o validador (camada 3). | Não |
 | `execute` | Roda o SQL com o `agent_reader` e registra a auditoria. | Não |
@@ -187,6 +194,11 @@ flowchart TD
 | `answer` | Escreve a resposta em português a partir da pergunta, do SQL e das linhas. | Sim: effort `low` |
 | `refuse` | Monta a recusa com o motivo dado por `understand`. | Não |
 | `give_up` | Explica que não conseguiu responder e mostra o último erro. | Não |
+| `draft_review` | Extrai do pedido de avaliação o número do pedido, a nota e o comentário (EXT-01). | Sim: effort `low`, saída estruturada |
+| `check_review` | Aplica as regras da avaliação e, se passarem, prepara a ação para aprovação. | Não |
+| `wait_for_approval` | Pausa o grafo com o `interrupt` até a aprovação ou a recusa. | Não |
+| `write_review` | Grava a avaliação aprovada, com o `review_writer`. | Não |
+| `discard_review` | Encerra a ação recusada, sem gravar nada. | Não |
 
 | ID | Requisito |
 |----|-----------|
@@ -271,7 +283,7 @@ As perguntas que pedem um nome também pedem o número (por exemplo, "e de quant
 
 | ID | Requisito |
 |----|-----------|
-| EXT-01 | **Escrita segura com confirmação humana.** A ação "registrar uma avaliação" (nota e comentário para um pedido entregue que ainda não foi avaliado) funciona assim: o grafo prepara o `INSERT`, pausa com o interrupt do LangGraph e só grava depois de `POST /actions/{id}/approve`. A ação usa um papel próprio, `review_writer`, com `INSERT` só em `reviews`, e tudo vai para a auditoria. |
+| EXT-01 | **Escrita segura com aprovação humana.** A única escrita é registrar a avaliação de um pedido, como em "avalie o pedido 1234 com nota 4: chegou frio". O `understand` reconhece o pedido (`register_review`), e o `draft_review` extrai `order_id`, `rating` e `comment` numa saída estruturada, validada com Pydantic: o modelo nunca escreve SQL de escrita. As regras ficam no service e leem o banco com o `agent_reader`: o pedido existe e foi entregue, ainda não tem avaliação, a nota vai de 1 a 5 e o comentário tem até 300 caracteres. Uma regra que falha encerra o pedido com `status = refused` e o motivo. Com as regras cumpridas, o grafo pausa com o `interrupt` do LangGraph, guardando o estado num checkpointer em memória, e a resposta vem com `status = pending_approval` e `action` (o `action_id` e o que será gravado); nas outras respostas, `action` não aparece. `POST /actions/{action_id}/approve` grava com o `review_writer` (SEC-06), e `POST /actions/{action_id}/reject` descarta. Uma ação inexistente responde 404, e uma já decidida responde 409, então aprovar duas vezes não grava duas vezes. Cada etapa vai para a auditoria (AUD-02). O MCP continua só de leitura. |
 | EXT-02 | **Servidor MCP** (SDK oficial, pelo stdio, com `python -m delivery_agent.mcp`) com duas ferramentas, `describe_schema` e `execute_sql`, as duas marcadas como somente leitura. Elas chamam o mesmo `SQLTools` da API, sem acesso direto ao banco: validação da entrada, validador, usuário somente leitura e auditoria com `source` igual a `mcp`. Um SQL recusado ou com erro volta ao modelo do cliente como erro da ferramenta, com a mensagem em português. A ação de escrita (EXT-01) não é exposta. |
 
 ## 7. Rastreabilidade
@@ -297,6 +309,7 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 | EXE-01, EXE-02 | `test_delivery_repository.py` (db), sem o validador na frente, e `test_sql_tools.py`, com o caminho completo |
 | SCH-01 a SCH-04 | `test_schema.py::test_shows_only_allowed_objects`, `test_every_table_and_column_has_comment`, `test_is_deterministic` e `test_includes_examples_and_glossary` (db) |
 | AUD-01 | `test_sql_tools.py::test_every_execution_is_logged` (db) e `test_audit.py` |
+| AUD-02 | `test_review_actions.py::test_a_valid_request_becomes_a_proposal_and_is_logged`, `test_the_rules_block_the_request_and_the_block_is_logged`, `test_each_decision_and_the_write_are_logged` e `test_a_failed_write_is_logged_and_raised`; `test_review_flow.py::test_the_audit_log_follows_the_action_from_the_proposal_to_the_write` |
 | CI-01, CI-02 | `.github/workflows/ci.yml` passando no GitHub, sem a chave da Anthropic |
 | GRA-01 | `test_graph.py::test_out_of_scope_is_refused_without_sql` e avaliação: Q20 |
 | GRA-02 | Avaliação: Q17, Q18 e Q19 |

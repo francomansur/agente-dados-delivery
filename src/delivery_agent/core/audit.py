@@ -1,4 +1,4 @@
-"""Security layer 4: one JSON line for every SQL that reaches the executor."""
+"""Security layer 4: one JSON line for every SQL that reaches the executor and each step of a write."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 Source = Literal["api", "eval", "mcp"]
 AuditStatus = Literal["ok", "rejected", "error", "timeout"]
+# blocked: the rules refused the request; rejected: the person said no; write_failed: the database did.
+ActionEvent = Literal["proposed", "blocked", "approved", "rejected", "written", "write_failed"]
 
 
 class QueryContext(BaseModel):
@@ -19,6 +21,12 @@ class QueryContext(BaseModel):
     request_id: str
     source: Source
     question: str | None = None
+
+
+class ActionContext(QueryContext):
+    """The request of a write action plus the action's own id, which the approval refers to."""
+
+    action_id: str
 
 
 class AuditRecord(BaseModel):
@@ -35,18 +43,35 @@ class AuditRecord(BaseModel):
     error: str | None
 
 
+class ActionRecord(BaseModel):
+    """One step of a write action, in the same log as the SQL: from the proposal to the write."""
+
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    request_id: str
+    source: Source
+    question: str | None
+    action_id: str
+    action: Literal["register_review"]
+    event: ActionEvent
+    order_id: int | None
+    rating: int | None
+    comment: str | None
+    error: str | None
+
+
 class AuditLog:
-    """Append-only JSON Lines file, safe to share between threads."""
+    """Append-only JSON Lines file, safe to share between threads and between instances."""
+
+    _lock = threading.Lock()  # one for the whole process: the SQL tools and the review actions share the file
 
     def __init__(self, path: Path) -> None:
         self.path = path
-        self._lock = threading.Lock()
 
-    def record(self, record: AuditRecord) -> None:
+    def record(self, record: AuditRecord | ActionRecord) -> None:
         """Append one record to the log, creating the folder if needed.
 
         Args:
-            record: The execution to log.
+            record: The execution or the step of a write action to log.
         """
         line = record.model_dump_json()
         self.path.parent.mkdir(parents=True, exist_ok=True)

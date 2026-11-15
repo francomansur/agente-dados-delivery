@@ -168,7 +168,7 @@ def test_docs_show_the_parameter_and_both_answers() -> None:
 def test_the_summary_keeps_the_fields_of_the_full_answer() -> None:
     full, summary = AgentAnswer.model_fields, AnswerSummary.model_fields
 
-    assert set(summary) == ESSENTIAL
+    assert set(summary) == ESSENTIAL | {"action"}
     assert all(summary[name].annotation == full[name].annotation for name in summary)
     assert all(summary[name].description == full[name].description for name in summary)
 

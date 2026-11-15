@@ -39,3 +39,7 @@ class ActionNotFound(Exception):
 
 class ActionAlreadyDecided(Exception):
     """The write action was approved or rejected before, so it cannot be decided again."""
+
+
+class ReviewBlocked(Exception):
+    """A rule of the review action refused the request before anything went for approval."""
