@@ -6,7 +6,7 @@ import httpx2
 import pytest
 
 from delivery_agent.llm.prompts import Understanding
-from delivery_agent.services.question_service import Agent, AgentAnswer
+from delivery_agent.services.question_service import AgentAnswer, QuestionService
 from evals.cases import Case
 from evals.run import confirm_spending, estimate_cost, run_evaluation, spent_so_far, summarize
 from fakes import COUNT_SQL, DONE, QUERY, FakeDatabase, FakeModel
@@ -16,17 +16,18 @@ REFUSE = Case(id="C2", question="Qual o telefone do cliente?", kind="refusal")
 REFERENCES = {"C1": [[1]]}
 
 
-def agent_with(*script: object) -> Agent:
-    return Agent(FakeDatabase(), FakeModel(*script))  # type: ignore[arg-type]
+def service_with(*script: object) -> QuestionService:
+    return QuestionService(FakeDatabase(), FakeModel(*script))  # type: ignore[arg-type]
 
 
 def test_executions_are_graded_saved_and_summarized(tmp_path: Path) -> None:
-    agent = agent_with(QUERY, COUNT_SQL, DONE, Understanding(intent="not_answerable", reason="Dado pessoal."))
+    refusal = Understanding(intent="not_answerable", reason="Dado pessoal.")
+    service = service_with(QUERY, COUNT_SQL, DONE, refusal)
 
     outcome = run_evaluation(
         [COUNT, REFUSE],
         REFERENCES,
-        lambda q: agent.ask(q, source="eval"),
+        lambda q: service.ask(q, source="eval"),
         reps=1,
         out_dir=tmp_path,
         budget_left_usd=1,
@@ -70,7 +71,7 @@ def test_infra_error_is_not_scored(tmp_path: Path) -> None:
 
 def test_the_budget_stops_the_run(tmp_path: Path) -> None:
     outcome = run_evaluation(
-        [COUNT], REFERENCES, agent_with().ask, reps=3, out_dir=tmp_path, budget_left_usd=0
+        [COUNT], REFERENCES, service_with().ask, reps=3, out_dir=tmp_path, budget_left_usd=0
     )
 
     assert outcome.stopped_by_budget

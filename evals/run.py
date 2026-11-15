@@ -2,7 +2,7 @@
 
 Each run is saved in ``evals/runs/<date-time>_<model>/`` with ``summary.json``, ``results.jsonl``
 (one line per execution) and ``errors.jsonl`` (infrastructure failures, kept out of the score).
-The run calls ``Agent.ask``, the same entry point as the API, and asks before spending money.
+The run calls ``QuestionService.ask``, the same entry point as the API, and asks before spending money.
 
 Usage:
     python -m evals.run            # 20 questions x 3 repetitions
@@ -31,7 +31,7 @@ from delivery_agent.core.errors import DatabaseUnavailable
 from delivery_agent.core.settings import Settings
 from delivery_agent.llm.client import AnthropicModel
 from delivery_agent.repositories.delivery_repository import Cell, Database, fetch_rows
-from delivery_agent.services.question_service import Agent, AgentAnswer, UsageReport
+from delivery_agent.services.question_service import AgentAnswer, QuestionService, UsageReport
 from evals.cases import CASES, Case, Kind
 from evals.grading import grade
 
@@ -302,11 +302,11 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = RUNS_DIR / f"{datetime.now():%Y-%m-%d_%H%M}_{settings.llm_model}"
 
     with Database(settings, AuditLog(settings.audit_log_path)) as database:
-        agent = Agent(database, model)
+        service = QuestionService(database, model)
         outcome = run_evaluation(
             cases,
             references,
-            lambda question: agent.ask(question, source="eval"),
+            lambda question: service.ask(question, source="eval"),
             reps=args.reps,
             out_dir=out_dir,
             budget_left_usd=args.budget - spent,

@@ -22,7 +22,7 @@ from delivery_agent.core.settings import Settings
 from delivery_agent.llm.client import AnthropicModel, LanguageModel
 from delivery_agent.repositories.delivery_repository import Database
 from delivery_agent.services.graph import SQLRunner
-from delivery_agent.services.question_service import Agent, AgentAnswer
+from delivery_agent.services.question_service import AgentAnswer, QuestionService
 
 MISSING_KEY = (
     "A chave da API da Anthropic não está configurada. Defina ANTHROPIC_API_KEY no .env e reinicie a api."
@@ -70,7 +70,7 @@ class Services:
 
     database: Backend
     model: LanguageModel | None
-    agent: Agent | None = None
+    questions: QuestionService | None = None
 
     @classmethod
     def from_settings(cls, settings: Settings) -> Services:
@@ -91,11 +91,11 @@ class Services:
 
         return cls(database=database, model=model)
 
-    def get_agent(self) -> Agent:
-        """Return the agent, building its graph on first use.
+    def get_question_service(self) -> QuestionService:
+        """Return the question service, building its graph on first use.
 
         Returns:
-            The agent.
+            The question service.
 
         Raises:
             HTTPException: 503 when the API key is missing.
@@ -104,10 +104,10 @@ class Services:
         if self.model is None:
             raise HTTPException(status_code=503, detail=MISSING_KEY)
 
-        if self.agent is None:
-            self.agent = Agent(self.database, self.model)
+        if self.questions is None:
+            self.questions = QuestionService(self.database, self.model)
 
-        return self.agent
+        return self.questions
 
 
 def create_app(services: Services | None = None) -> FastAPI:
@@ -141,7 +141,7 @@ def create_app(services: Services | None = None) -> FastAPI:
     )
     def ask_question(request: QuestionRequest) -> AgentAnswer:
         try:
-            return resolved.get_agent().ask(request.question, source="api")
+            return resolved.get_question_service().ask(request.question, source="api")
         except DatabaseUnavailable as error:
             raise HTTPException(
                 status_code=503, detail=f"O banco de dados está fora do ar: {error}"

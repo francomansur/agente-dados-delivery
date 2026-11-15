@@ -1,4 +1,4 @@
-"""Entry point shared by the API and the evaluation: one question in, one answer out."""
+"""Use case shared by the API and the evaluation: answer one business question."""
 
 from __future__ import annotations
 
@@ -68,8 +68,8 @@ class AgentAnswer(BaseModel):
     duration_ms: float
 
 
-class Agent:
-    """The compiled graph plus the bookkeeping around one question."""
+class QuestionService:
+    """Answer business questions: the compiled graph plus the bookkeeping around each question."""
 
     def __init__(self, runner: SQLRunner, model: LanguageModel) -> None:
         self._model = model

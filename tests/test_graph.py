@@ -2,7 +2,7 @@ import pytest
 
 from delivery_agent.core.errors import ExecutionError
 from delivery_agent.llm.prompts import SQLDraft, Understanding
-from delivery_agent.services.question_service import Agent, AgentAnswer
+from delivery_agent.services.question_service import AgentAnswer, QuestionService
 from fakes import COUNT_SQL, DONE, QUERY, FakeDatabase, FakeModel
 
 QUESTION = "Quantos pedidos foram entregues?"
@@ -11,7 +11,7 @@ MISSING_COLUMN = ExecutionError('Erro do Postgres: column "nope" does not exist'
 
 
 def ask(model: FakeModel, database: FakeDatabase | None = None) -> AgentAnswer:
-    return Agent(database or FakeDatabase(), model).ask(QUESTION, source="eval")
+    return QuestionService(database or FakeDatabase(), model).ask(QUESTION, source="eval")
 
 
 def test_question_is_answered_with_sql_and_rows() -> None:

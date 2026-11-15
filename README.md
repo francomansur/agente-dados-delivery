@@ -104,7 +104,7 @@ graph TD;
 | `refuse` | Explica por que a pergunta não pode ser respondida. | Não |
 | `give_up` | Explica que não conseguiu e mostra o último erro. | Não |
 
-Cada nó que chama o modelo usa um system prompt fixo (instruções, descrição da base e glossário), com cache de prompt; a pergunta vai só na mensagem do usuário. As saídas do modelo são estruturadas e validadas com Pydantic. A API e a avaliação chamam a mesma função, `Agent.ask`.
+Cada nó que chama o modelo usa um system prompt fixo (instruções, descrição da base e glossário), com cache de prompt; a pergunta vai só na mensagem do usuário. As saídas do modelo são estruturadas e validadas com Pydantic. A API e a avaliação chamam a mesma função, `QuestionService.ask`.
 
 ## De onde vêm os dados
 
