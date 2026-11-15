@@ -1,9 +1,17 @@
-"""Generate the synthetic dataset of a food delivery marketplace.
+"""Generate a fictional but realistic dataset of a food delivery marketplace.
 
-The data is synthetic and deterministic: the same seed always produces the same
-rows, so the expected answers of the evaluation never change. This module only
-uses the standard library because it also runs in the first stage of the
-Postgres image build.
+Nothing here comes from a real company. The constants below are the recipe of a random draw:
+how many restaurants each city has, how popular each cuisine is at lunch or at dinner, menu
+prices, delivery fees, how long deliveries take, how often orders are canceled, and so on.
+Following that recipe, the draw creates restaurants, customers, couriers, menus, about 28
+thousand orders and their reviews.
+
+The flow is: this generator, then one CSV file per table, then Postgres loads the files the
+first time its container starts (see db/Dockerfile and db/init/).
+
+The seed is fixed, so the dataset is always the same, row by row, and the expected answers of
+the evaluation stay stable. The module only uses the standard library because it also runs in
+the first stage of the Postgres image build.
 
 Usage:
     python -m delivery_agent.seed --out data/seed
@@ -67,74 +75,117 @@ TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
 }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class City:
     """Parameters that shape the orders of one city."""
 
     demand: float  # share of all orders
-    restaurants: int
+    restaurants: int  # how many restaurants the city has
     price_factor: float  # multiplies menu prices
     traffic_factor: float  # multiplies travel time
-    extra_cancellation: float
+    extra_cancellation: float  # added to the chance that an order is canceled
     neighborhoods: tuple[str, ...]
     area_code: str  # phone area code, used only for the fictional customer data
 
 
 CITIES: dict[str, City] = {
     "São Paulo": City(
-        0.34,
-        48,
-        1.15,
-        1.25,
-        0.0,
-        ("Pinheiros", "Moema", "Vila Mariana", "Tatuapé", "Santana", "Itaim Bibi", "Perdizes", "Butantã"),
-        "11",
+        demand=0.34,
+        restaurants=48,
+        price_factor=1.15,
+        traffic_factor=1.25,
+        extra_cancellation=0.0,
+        neighborhoods=(
+            "Pinheiros",
+            "Moema",
+            "Vila Mariana",
+            "Tatuapé",
+            "Santana",
+            "Itaim Bibi",
+            "Perdizes",
+            "Butantã",
+        ),
+        area_code="11",
     ),
     "Rio de Janeiro": City(
-        0.20,
-        30,
-        1.12,
-        1.20,
-        0.008,
-        ("Copacabana", "Botafogo", "Tijuca", "Barra da Tijuca", "Leblon", "Méier"),
-        "21",
+        demand=0.2,
+        restaurants=30,
+        price_factor=1.12,
+        traffic_factor=1.2,
+        extra_cancellation=0.008,
+        neighborhoods=("Copacabana", "Botafogo", "Tijuca", "Barra da Tijuca", "Leblon", "Méier"),
+        area_code="21",
     ),
     "Belo Horizonte": City(
-        0.12, 18, 1.00, 1.05, 0.0, ("Savassi", "Funcionários", "Pampulha", "Buritis", "Lourdes"), "31"
+        demand=0.12,
+        restaurants=18,
+        price_factor=1.0,
+        traffic_factor=1.05,
+        extra_cancellation=0.0,
+        neighborhoods=("Savassi", "Funcionários", "Pampulha", "Buritis", "Lourdes"),
+        area_code="31",
     ),
     "Curitiba": City(
-        0.10, 15, 1.00, 1.00, 0.0, ("Batel", "Água Verde", "Centro", "Bigorrilho", "Portão"), "41"
+        demand=0.1,
+        restaurants=15,
+        price_factor=1.0,
+        traffic_factor=1.0,
+        extra_cancellation=0.0,
+        neighborhoods=("Batel", "Água Verde", "Centro", "Bigorrilho", "Portão"),
+        area_code="41",
     ),
     "Porto Alegre": City(
-        0.08, 12, 0.98, 1.00, 0.0, ("Moinhos de Vento", "Cidade Baixa", "Menino Deus", "Petrópolis"), "51"
+        demand=0.08,
+        restaurants=12,
+        price_factor=0.98,
+        traffic_factor=1.0,
+        extra_cancellation=0.0,
+        neighborhoods=("Moinhos de Vento", "Cidade Baixa", "Menino Deus", "Petrópolis"),
+        area_code="51",
     ),
-    "Recife": City(0.09, 13, 0.92, 1.10, 0.012, ("Boa Viagem", "Casa Forte", "Espinheiro", "Graças"), "81"),
-    "Uberaba": City(0.07, 10, 0.85, 0.85, 0.0, ("Centro", "Mercês", "Fabrício", "Santa Maria"), "34"),
+    "Recife": City(
+        demand=0.09,
+        restaurants=13,
+        price_factor=0.92,
+        traffic_factor=1.1,
+        extra_cancellation=0.012,
+        neighborhoods=("Boa Viagem", "Casa Forte", "Espinheiro", "Graças"),
+        area_code="81",
+    ),
+    "Uberaba": City(
+        demand=0.07,
+        restaurants=10,
+        price_factor=0.85,
+        traffic_factor=0.85,
+        extra_cancellation=0.0,
+        neighborhoods=("Centro", "Mercês", "Fabrício", "Santa Maria"),
+        area_code="34",
+    ),
 }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Category:
     """A cuisine: its menu, its restaurant names and when people order it."""
 
     name: str
-    weight: float  # share among restaurants
+    restaurant_share: float  # share of the restaurants that serve this cuisine
     prep_minutes: float  # average preparation time
-    shift_demand: tuple[float, float, float]  # relative demand at lunch, afternoon and dinner
+    shift_demand: tuple[float, float, float]  # relative demand at (lunch, afternoon, dinner)
     mains: tuple[tuple[str, float], ...]  # (name, base price); the first one is the flagship
     drinks: tuple[tuple[str, float], ...]
     desserts: tuple[tuple[str, float], ...]
     restaurant_names: tuple[str, ...]
-    main_item_type: str = "dish"
+    main_item_type: str = "dish"  # dish, or dessert for sweets and açaí
 
 
 CATEGORIES: tuple[Category, ...] = (
     Category(
-        "Pizza",
-        0.16,
-        28,
-        (0.4, 0.5, 1.7),
-        (
+        name="Pizza",
+        restaurant_share=0.16,
+        prep_minutes=28,
+        shift_demand=(0.4, 0.5, 1.7),  # lunch, afternoon, dinner
+        mains=(
             ("Pizza Calabresa", 50),
             ("Pizza Margherita", 52),
             ("Pizza Quatro Queijos", 58),
@@ -142,9 +193,9 @@ CATEGORIES: tuple[Category, ...] = (
             ("Pizza Frango com Catupiry", 57),
             ("Pizza Pepperoni", 62),
         ),
-        (("Refrigerante 2L", 14), ("Refrigerante lata", 6.5), ("Água mineral", 4)),
-        (("Pizza de Chocolate", 46), ("Brownie", 12)),
-        (
+        drinks=(("Refrigerante 2L", 14), ("Refrigerante lata", 6.5), ("Água mineral", 4)),
+        desserts=(("Pizza de Chocolate", 46), ("Brownie", 12)),
+        restaurant_names=(
             "Pizzaria Bella Napoli",
             "Forno da Vila",
             "Pizza Nostra",
@@ -156,11 +207,11 @@ CATEGORIES: tuple[Category, ...] = (
         ),
     ),
     Category(
-        "Hambúrguer",
-        0.15,
-        18,
-        (0.8, 0.8, 1.4),
-        (
+        name="Hambúrguer",
+        restaurant_share=0.15,
+        prep_minutes=18,
+        shift_demand=(0.8, 0.8, 1.4),  # lunch, afternoon, dinner
+        mains=(
             ("Smash Burger Duplo", 36),
             ("X-Bacon", 32),
             ("X-Burguer", 28),
@@ -169,9 +220,9 @@ CATEGORIES: tuple[Category, ...] = (
             ("Batata Frita Média", 16),
             ("Onion Rings", 18),
         ),
-        (("Refrigerante lata", 6.5), ("Milkshake de Chocolate", 19), ("Água mineral", 4)),
-        (("Brownie", 12), ("Petit Gâteau", 18)),
-        (
+        drinks=(("Refrigerante lata", 6.5), ("Milkshake de Chocolate", 19), ("Água mineral", 4)),
+        desserts=(("Brownie", 12), ("Petit Gâteau", 18)),
+        restaurant_names=(
             "Burger do Zé",
             "Smash Point",
             "Brasa Burger",
@@ -183,11 +234,11 @@ CATEGORIES: tuple[Category, ...] = (
         ),
     ),
     Category(
-        "Japonesa",
-        0.12,
-        30,
-        (0.8, 0.5, 1.4),
-        (
+        name="Japonesa",
+        restaurant_share=0.12,
+        prep_minutes=30,
+        shift_demand=(0.8, 0.5, 1.4),  # lunch, afternoon, dinner
+        mains=(
             ("Combinado 20 peças", 68),
             ("Temaki de Salmão", 32),
             ("Hot Roll 10 peças", 34),
@@ -196,9 +247,9 @@ CATEGORIES: tuple[Category, ...] = (
             ("Uramaki Filadélfia", 30),
             ("Poke de Salmão", 44),
         ),
-        (("Refrigerante lata", 6.5), ("Chá verde gelado", 9), ("Água mineral", 4)),
-        (("Harumaki de Banana", 16), ("Tempurá de Sorvete", 22)),
-        (
+        drinks=(("Refrigerante lata", 6.5), ("Chá verde gelado", 9), ("Água mineral", 4)),
+        desserts=(("Harumaki de Banana", 16), ("Tempurá de Sorvete", 22)),
+        restaurant_names=(
             "Sushi Kenzo",
             "Temakeria Hana",
             "Sakura Sushi",
@@ -210,11 +261,11 @@ CATEGORIES: tuple[Category, ...] = (
         ),
     ),
     Category(
-        "Brasileira",
-        0.14,
-        22,
-        (2.0, 0.6, 0.6),
-        (
+        name="Brasileira",
+        restaurant_share=0.14,
+        prep_minutes=22,
+        shift_demand=(2.0, 0.6, 0.6),  # lunch, afternoon, dinner
+        mains=(
             ("Marmita Executiva", 26),
             ("Feijoada Completa", 39),
             ("Picanha com Fritas", 62),
@@ -223,9 +274,9 @@ CATEGORIES: tuple[Category, ...] = (
             ("Strogonoff de Frango", 34),
             ("Baião de Dois", 36),
         ),
-        (("Suco natural", 9), ("Refrigerante lata", 6.5), ("Guaraná 2L", 12), ("Água mineral", 4)),
-        (("Pudim de Leite", 12), ("Mousse de Maracujá", 11)),
-        (
+        drinks=(("Suco natural", 9), ("Refrigerante lata", 6.5), ("Guaraná 2L", 12), ("Água mineral", 4)),
+        desserts=(("Pudim de Leite", 12), ("Mousse de Maracujá", 11)),
+        restaurant_names=(
             "Sabor de Minas",
             "Cozinha da Vó",
             "Tempero Caseiro",
@@ -237,11 +288,11 @@ CATEGORIES: tuple[Category, ...] = (
         ),
     ),
     Category(
-        "Italiana",
-        0.08,
-        25,
-        (1.1, 0.5, 1.1),
-        (
+        name="Italiana",
+        restaurant_share=0.08,
+        prep_minutes=25,
+        shift_demand=(1.1, 0.5, 1.1),  # lunch, afternoon, dinner
+        mains=(
             ("Lasanha à Bolonhesa", 46),
             ("Espaguete ao Sugo", 38),
             ("Nhoque ao Molho Branco", 42),
@@ -249,9 +300,9 @@ CATEGORIES: tuple[Category, ...] = (
             ("Fettuccine Alfredo", 48),
             ("Ravioli de Ricota", 50),
         ),
-        (("Refrigerante lata", 6.5), ("Suco de uva integral", 10), ("Água mineral", 4)),
-        (("Tiramisù", 19), ("Panna Cotta", 16)),
-        (
+        drinks=(("Refrigerante lata", 6.5), ("Suco de uva integral", 10), ("Água mineral", 4)),
+        desserts=(("Tiramisù", 19), ("Panna Cotta", 16)),
+        restaurant_names=(
             "Cantina Nonna Rosa",
             "Trattoria Bellini",
             "Casa di Pasta",
@@ -261,11 +312,11 @@ CATEGORIES: tuple[Category, ...] = (
         ),
     ),
     Category(
-        "Árabe",
-        0.06,
-        20,
-        (1.0, 1.0, 1.0),
-        (
+        name="Árabe",
+        restaurant_share=0.06,
+        prep_minutes=20,
+        shift_demand=(1.0, 1.0, 1.0),  # lunch, afternoon, dinner
+        mains=(
             ("Esfiha de Carne", 6),
             ("Esfiha de Queijo", 6),
             ("Kibe Frito", 7),
@@ -273,66 +324,78 @@ CATEGORIES: tuple[Category, ...] = (
             ("Beirute de Rosbife", 38),
             ("Prato Árabe Completo", 49),
         ),
-        (("Refrigerante lata", 6.5), ("Suco natural", 9), ("Água mineral", 4)),
-        (("Baklava", 14),),
-        ("Empório Árabe", "Esfiharia Damasco", "Sultan Shawarma", "Casa Libanesa", "Cedro do Líbano"),
+        drinks=(("Refrigerante lata", 6.5), ("Suco natural", 9), ("Água mineral", 4)),
+        desserts=(("Baklava", 14),),
+        restaurant_names=(
+            "Empório Árabe",
+            "Esfiharia Damasco",
+            "Sultan Shawarma",
+            "Casa Libanesa",
+            "Cedro do Líbano",
+        ),
     ),
     Category(
-        "Saudável",
-        0.07,
-        15,
-        (1.6, 0.9, 0.6),
-        (
+        name="Saudável",
+        restaurant_share=0.07,
+        prep_minutes=15,
+        shift_demand=(1.6, 0.9, 0.6),  # lunch, afternoon, dinner
+        mains=(
             ("Bowl de Quinoa", 38),
             ("Salada Caesar com Frango", 34),
             ("Wrap Integral de Frango", 29),
             ("Poke Vegano", 36),
             ("Frango com Batata-Doce", 32),
         ),
-        (("Suco verde", 14), ("Água de coco", 9), ("Kombucha", 16)),
-        (("Salada de Frutas", 12),),
-        ("Green Bowl", "Vida Leve", "Fit Kitchen", "Salad Point", "Natural Mente"),
+        drinks=(("Suco verde", 14), ("Água de coco", 9), ("Kombucha", 16)),
+        desserts=(("Salada de Frutas", 12),),
+        restaurant_names=("Green Bowl", "Vida Leve", "Fit Kitchen", "Salad Point", "Natural Mente"),
     ),
     Category(
-        "Doces",
-        0.05,
-        12,
-        (0.5, 2.5, 0.9),
-        (
+        name="Doces",
+        restaurant_share=0.05,
+        prep_minutes=12,
+        shift_demand=(0.5, 2.5, 0.9),  # lunch, afternoon, dinner
+        mains=(
             ("Bolo de Pote", 15),
             ("Brigadeiro Gourmet (6 un)", 24),
             ("Torta de Limão (fatia)", 16),
             ("Cookie Recheado", 10),
             ("Cheesecake de Frutas Vermelhas", 19),
         ),
-        (("Café expresso", 7), ("Chocolate quente", 12)),
-        (),
-        ("Doce Encanto", "Confeitaria Flor de Açúcar", "Brigaderia da Ana", "Ateliê do Bolo", "Cacau & Cia"),
+        drinks=(("Café expresso", 7), ("Chocolate quente", 12)),
+        desserts=(),
+        restaurant_names=(
+            "Doce Encanto",
+            "Confeitaria Flor de Açúcar",
+            "Brigaderia da Ana",
+            "Ateliê do Bolo",
+            "Cacau & Cia",
+        ),
         main_item_type="dessert",
     ),
     Category(
-        "Açaí",
-        0.06,
-        8,
-        (0.6, 2.8, 0.8),
-        (
+        name="Açaí",
+        restaurant_share=0.06,
+        prep_minutes=8,
+        shift_demand=(0.6, 2.8, 0.8),  # lunch, afternoon, dinner
+        mains=(
             ("Açaí 500ml", 24),
             ("Açaí 300ml", 18),
             ("Açaí 700ml", 30),
             ("Cupuaçu 500ml", 24),
             ("Tigela de Açaí com Frutas", 28),
         ),
-        (("Água mineral", 4), ("Suco natural", 9)),
-        (),
-        ("Açaí da Praia", "Point do Açaí", "Açaí Tropical", "Amazônia Açaí", "Açaí Mania"),
+        drinks=(("Água mineral", 4), ("Suco natural", 9)),
+        desserts=(),
+        restaurant_names=("Açaí da Praia", "Point do Açaí", "Açaí Tropical", "Amazônia Açaí", "Açaí Mania"),
         main_item_type="dessert",
     ),
     Category(
-        "Lanches",
-        0.07,
-        14,
-        (0.9, 2.0, 0.8),
-        (
+        name="Lanches",
+        restaurant_share=0.07,
+        prep_minutes=14,
+        shift_demand=(0.9, 2.0, 0.8),  # lunch, afternoon, dinner
+        mains=(
             ("Coxinha (6 un)", 18),
             ("Pastel de Carne", 12),
             ("Pastel de Queijo", 11),
@@ -340,9 +403,9 @@ CATEGORIES: tuple[Category, ...] = (
             ("Cachorro-Quente Completo", 19),
             ("Pão de Queijo (10 un)", 16),
         ),
-        (("Caldo de cana", 9), ("Refrigerante lata", 6.5), ("Café com leite", 7)),
-        (("Churros", 9),),
-        (
+        drinks=(("Caldo de cana", 9), ("Refrigerante lata", 6.5), ("Café com leite", 7)),
+        desserts=(("Churros", 9),),
+        restaurant_names=(
             "Lanchonete do Bairro",
             "Pastelaria Imperial",
             "Cantina da Esquina",
@@ -351,38 +414,57 @@ CATEGORIES: tuple[Category, ...] = (
         ),
     ),
     Category(
-        "Chinesa",
-        0.04,
-        22,
-        (1.0, 0.6, 1.2),
-        (
+        name="Chinesa",
+        restaurant_share=0.04,
+        prep_minutes=22,
+        shift_demand=(1.0, 0.6, 1.2),  # lunch, afternoon, dinner
+        mains=(
             ("Yakisoba de Frango", 39),
             ("Frango Xadrez", 42),
             ("Rolinho Primavera (4 un)", 16),
             ("Arroz Chop Suey", 34),
             ("Carne com Brócolis", 44),
         ),
-        (("Refrigerante lata", 6.5), ("Chá gelado", 8), ("Água mineral", 4)),
-        (("Banana Caramelada", 14),),
-        ("Dragão Dourado", "China Wok", "Jardim de Pequim", "Muralha Chinesa", "Lótus Oriental"),
+        drinks=(("Refrigerante lata", 6.5), ("Chá gelado", 8), ("Água mineral", 4)),
+        desserts=(("Banana Caramelada", 14),),
+        restaurant_names=(
+            "Dragão Dourado",
+            "China Wok",
+            "Jardim de Pequim",
+            "Muralha Chinesa",
+            "Lótus Oriental",
+        ),
     ),
     Category(
-        "Mexicana",
-        0.03,
-        20,
-        (0.7, 0.6, 1.4),
-        (
+        name="Mexicana",
+        restaurant_share=0.03,
+        prep_minutes=20,
+        shift_demand=(0.7, 0.6, 1.4),  # lunch, afternoon, dinner
+        mains=(
             ("Burrito de Carne", 36),
             ("Tacos (3 un)", 32),
             ("Nachos com Guacamole", 34),
             ("Quesadilla de Frango", 31),
             ("Chili com Carne", 38),
         ),
-        (("Refrigerante lata", 6.5), ("Limonada", 10), ("Água mineral", 4)),
-        (("Churros com Doce de Leite", 15),),
-        ("Taco Loco", "Cantina Mexicana", "El Sombrero", "Mi Tierra Tex-Mex", "La Calaca"),
+        drinks=(("Refrigerante lata", 6.5), ("Limonada", 10), ("Água mineral", 4)),
+        desserts=(("Churros com Doce de Leite", 15),),
+        restaurant_names=("Taco Loco", "Cantina Mexicana", "El Sombrero", "Mi Tierra Tex-Mex", "La Calaca"),
     ),
 )
+
+# Standard delivery fee of a restaurant, in R$, and the chance of each value. The chances add up to 1.
+DELIVERY_FEE_ODDS = (
+    (0.0, 0.12),
+    (4.99, 0.15),
+    (5.99, 0.20),
+    (6.99, 0.20),
+    (7.99, 0.15),
+    (8.99, 0.10),
+    (9.99, 0.08),
+)
+# Vehicle of a courier and the chance of each one. The chances add up to 1.
+VEHICLE_ODDS = (("motorcycle", 0.68), ("bicycle", 0.22), ("car", 0.10))
 
 WEEKDAY_FACTOR = (0.82, 0.84, 0.90, 0.96, 1.18, 1.32, 1.24)  # Monday to Sunday
 SPECIAL_DATES = {
@@ -504,6 +586,11 @@ def _menu_price(value: float) -> float:
     return max(round(_round_half_up(value) - 0.10, 2), 0.90)
 
 
+def _draw[T](rng: random.Random, odds: tuple[tuple[T, float], ...]) -> T:
+    """Draw one value from (value, chance) pairs."""
+    return rng.choices([value for value, _ in odds], weights=[chance for _, chance in odds])[0]
+
+
 def _random_date(rng: random.Random, first: date, last: date) -> date:
     return first + timedelta(days=rng.randint(0, (last - first).days))
 
@@ -522,7 +609,7 @@ def _weighted_sample(rng: random.Random, items: list[MenuItem], k: int) -> list[
 
 
 def _generate_restaurants(rng: random.Random) -> list[Restaurant]:
-    weights = [category.weight for category in CATEGORIES]
+    shares = [category.restaurant_share for category in CATEGORIES]
     free_names = {c.name: rng.sample(c.restaurant_names, len(c.restaurant_names)) for c in CATEGORIES}
     used_names: set[str] = set()
     restaurants: list[Restaurant] = []
@@ -530,7 +617,7 @@ def _generate_restaurants(rng: random.Random) -> list[Restaurant]:
 
     for city_name, city in CITIES.items():
         for _ in range(city.restaurants):
-            category = rng.choices(CATEGORIES, weights=weights)[0]
+            category = rng.choices(CATEGORIES, weights=shares)[0]
             neighborhood = rng.choice(city.neighborhoods)
             available = free_names[category.name]
 
@@ -563,10 +650,7 @@ def _generate_restaurants(rng: random.Random) -> list[Restaurant]:
                 category=category,
                 city=city_name,
                 neighborhood=neighborhood,
-                base_fee=rng.choices(
-                    [0.0, 4.99, 5.99, 6.99, 7.99, 8.99, 9.99],
-                    weights=[0.12, 0.15, 0.20, 0.20, 0.15, 0.10, 0.08],
-                )[0],
+                base_fee=_draw(rng, DELIVERY_FEE_ODDS),
                 signup=signup,
                 popularity=rng.lognormvariate(0, 0.75),
                 quality=rng.gauss(0, 0.35),
@@ -632,7 +716,7 @@ def _generate_couriers(rng: random.Random, count: int = 460) -> list[Courier]:
         else:
             signup = _random_date(rng, date(2026, 1, 1), date(2026, 9, 30))
 
-        vehicle = rng.choices(["motorcycle", "bicycle", "car"], weights=[0.68, 0.22, 0.10])[0]
+        vehicle = _draw(rng, VEHICLE_ODDS)
         city = rng.choices(city_names, weights=city_weights)[0]
         couriers.append(Courier(courier_id, city, vehicle, signup))
 
