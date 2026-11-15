@@ -1,9 +1,8 @@
 """Entry point of the API: create the FastAPI app, assemble its dependencies and include the routes.
 
-This is the only module that knows the concrete classes of every layer. When the api starts, the
-lifespan builds the repository, the SQL tools (with the audit log) and the Claude client from the
-settings; when it stops, it closes the database connections. The routes receive these objects
-through ``Depends``.
+When the api starts, the lifespan opens the database access with ``assembly.open_sql_tools`` and
+creates the Claude client from the settings; when it stops, it closes the database connections. The
+routes receive these objects through ``Depends``.
 
 Run it with ``uvicorn delivery_agent.main:app``.
 """
@@ -19,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from delivery_agent import __version__
 from delivery_agent.api.routes import WEB_DIR, router
-from delivery_agent.core.audit import AuditLog
+from delivery_agent.assembly import open_sql_tools
 from delivery_agent.core.errors import MissingAPIKey
 from delivery_agent.core.settings import Settings
 from delivery_agent.llm.client import AnthropicModel, LanguageModel
@@ -56,9 +55,7 @@ class Services:
         Returns:
             The services, with no model when ``ANTHROPIC_API_KEY`` is missing.
         """
-        repository = DeliveryRepository(settings)
-        repository.open(wait=False)
-        tools = SQLTools(repository, AuditLog(settings.audit_log_path))
+        repository, tools = open_sql_tools(settings)
         api_key = settings.anthropic_api_key
         model = (
             AnthropicModel(api_key.get_secret_value(), settings.llm_model) if api_key is not None else None

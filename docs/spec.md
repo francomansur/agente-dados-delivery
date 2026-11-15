@@ -32,13 +32,14 @@ flowchart LR
 | QLT-02 | `ruff check` e `ruff format --check` limpos, com regras de estilo, imports, bugs comuns e docstrings no estilo Google. |
 | QLT-03 | Pydantic na entrada de `execute_sql` (e das ferramentas do MCP, se o extra entrar), nas saídas estruturadas do modelo e nas configurações, via pydantic-settings. |
 | QLT-04 | pytest com cobertura mínima de 85% em `src/`. |
-| QLT-05 | O código fica em camadas por responsabilidade, e as dependências vão num sentido só: `api` → `services` → (`repositories`, `llm`) → `core`. As rotas só tratam o HTTP, o repository só fala com o banco (não importa o validador nem a auditoria) e o `main.py` é o único módulo que monta as peças de todas as camadas. |
+| QLT-05 | O código fica em camadas por responsabilidade, e as dependências vão num sentido só: `api` → `services` → (`repositories`, `llm`) → `core`. As rotas só tratam o HTTP, o repository só fala com o banco (não importa o validador nem a auditoria) e a montagem das peças fica fora das camadas: o `main.py` cria a API, e o acesso ao banco (pool somente leitura, auditoria e ferramentas de SQL) sai de uma função só, no `assembly.py`. |
 
 ### 1.2 Estrutura
 
 ```
 src/delivery_agent/
   main.py             cria a API: monta as peças de cada camada e registra as rotas
+  assembly.py         monta o acesso ao banco: o pool somente leitura, a auditoria e as ferramentas de SQL
   api/                rotas HTTP
   services/           casos de uso e regras: a pergunta, o fluxo do LangGraph, as ferramentas de SQL e o validador
   repositories/       acesso ao banco, só SQL

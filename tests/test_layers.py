@@ -7,7 +7,8 @@ import pytest
 
 PACKAGE = Path(__file__).parent.parent / "src" / "delivery_agent"
 
-# The layers each one may import, besides itself. main.py assembles every layer, so it is not listed.
+# The layers each one may import, besides itself. main.py and assembly.py put the layers together,
+# so they are not listed.
 ALLOWED = {
     "api": {"services", "core"},
     "services": {"repositories", "llm", "core"},
