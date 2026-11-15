@@ -1,0 +1,32 @@
+# Segredos: chaves e senhas ficam só no .env local
+.env
+.env.*
+!.env.example
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Caches e artefatos de build
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Gerados localmente
+logs/
+data/*.db
+data/*.db.tmp
+data/*.db-journal
+.gradio/
+
+# Sistema
+.DS_Store

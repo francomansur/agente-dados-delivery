@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agente-dados-delivery"
+version = "0.1.0"
+description = "Agente que responde perguntas em português sobre uma base de delivery, gerando e executando SQL somente leitura."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Franco Mansur Giani" }]
+dependencies = [
+    "anthropic>=2.8,<3",
+    "mcp>=2.3,<3",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+ui = ["gradio>=6,<7"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+agente-delivery = "agente_delivery.cli:main"
+agente-delivery-mcp = "agente_delivery.servidor_mcp:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
