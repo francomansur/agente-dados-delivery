@@ -33,7 +33,7 @@ MISSING_KEY = (
 DESCRIPTION = """\
 Responde, em português, perguntas de negócio sobre a base fictícia de um marketplace de delivery.
 Para cada pergunta, o agente escreve um SQL, valida, executa com um usuário somente leitura e
-responde mostrando o SQL e as linhas usadas."""
+responde com as linhas usadas. O SQL, as tentativas, o tempo e o custo vêm com include_details=true."""
 
 
 @dataclass

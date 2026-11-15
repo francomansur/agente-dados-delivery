@@ -5,7 +5,7 @@
 
 ## 1. Visão geral
 
-**O que é:** uma API que responde, em português, perguntas de negócio sobre a base fictícia de um marketplace de delivery. Para cada pergunta, o agente gera um SQL, valida, executa no Postgres com um usuário somente leitura e responde mostrando o SQL e as linhas usadas.
+**O que é:** uma API que responde, em português, perguntas de negócio sobre a base fictícia de um marketplace de delivery. Para cada pergunta, o agente gera um SQL, valida, executa no Postgres com um usuário somente leitura e responde com as linhas usadas. O SQL e os outros detalhes técnicos vêm quando pedidos (API-05).
 
 **Stack:** Python 3.12, LangGraph (fluxo), FastAPI (API), SDK oficial `anthropic` com o Claude Haiku 5.5, PostgreSQL em Docker Compose, psycopg 3, sqlglot, pytest, ruff e mypy.
 
@@ -196,10 +196,11 @@ flowchart TD
 
 | ID | Requisito |
 |----|-----------|
-| API-01 | `POST /questions` recebe `{"question": "..."}`, com 3 a 500 caracteres, e devolve `request_id`, `status` (`answered`, `refused` ou `failed`), `answer`, `sql`, `columns`, `rows`, `truncated`, `attempts`, `usage` (tokens e custo em US$) e `duration_ms`. |
+| API-01 | `POST /questions` recebe `{"question": "..."}`, com 3 a 500 caracteres, e devolve `request_id`, `status` (`answered`, `refused` ou `failed`), `answer`, `columns`, `rows` e `truncated`. Os detalhes técnicos vêm só quando pedidos (API-05). |
 | API-02 | `GET /health` responde 200 quando a api e o banco respondem, e 503 quando o banco está fora. Não chama o modelo. |
 | API-03 | `/docs` documenta as rotas, com exemplos de pergunta e de resposta. |
 | API-04 | Sem a chave da Anthropic, `POST /questions` responde 503 com uma explicação, e com o banco fora do ar também. Um erro na API do modelo, depois das novas tentativas do SDK, vira 502. Uma pergunta inválida vira 422. |
+| API-05 | O parâmetro `include_details` (na query, booleano, padrão `false`) pede os detalhes técnicos: com `POST /questions?include_details=true`, a resposta traz também `sql`, `attempts`, `usage` (tokens e custo em US$) e `duration_ms`. Sem ele, esses campos não aparecem, nem como `null`. A auditoria registra o SQL de toda pergunta, com ou sem o parâmetro, e o `/docs` mostra o parâmetro e um exemplo de cada formato de resposta. O serviço não muda: a resposta enxuta é um recorte que a rota faz. |
 
 ## 4. Etapa 3: avaliação
 
@@ -283,12 +284,13 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 | GRA-01 | `test_graph.py::test_out_of_scope_is_refused_without_sql` e avaliação: Q20 |
 | GRA-02 | Avaliação: Q17, Q18 e Q19 |
 | GRA-03 | `test_graph.py::test_sql_error_is_fixed` e `test_gives_up_after_two_fixes` |
-| GRA-04 | `test_api.py::test_question_returns_sql_and_rows` e a checagem "resposta certa" da avaliação |
+| GRA-04 | `test_graph.py::test_question_is_answered_with_sql_and_rows` e a checagem "resposta certa" da avaliação |
 | GRA-05 | Avaliação: Q04 |
 | GRA-06 | `test_settings.py` |
 | GRA-07 | `test_llm.py::test_question_is_not_in_the_system_prompt` |
 | GRA-08 | `test_graph.py::test_model_refusal` e `test_max_tokens` |
 | API-01 a API-04 | `test_api.py` |
+| API-05 | `test_api.py::test_the_answer_has_only_the_essential_by_default`, `test_details_come_only_when_asked`, `test_a_refusal_has_no_sql_by_default_and_a_null_one_with_details`, `test_the_audit_log_keeps_the_sql_that_the_default_answer_leaves_out` e `test_docs_show_the_parameter_and_both_answers` |
 | EVA-01, EVA-03, EVA-05 | A rodada registrada em `evals/runs/` e no README |
 | EVA-02, EVA-09 | `test_eval_grading.py` |
 | EVA-04, EVA-08 | `test_eval_runner.py::test_infra_error_is_not_scored` e `test_asks_before_spending` |
