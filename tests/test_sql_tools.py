@@ -151,22 +151,24 @@ def test_cuts_the_result_at_100_rows(tools: SQLTools) -> None:
 def test_every_execution_is_logged(
     settings: Settings, repository: DeliveryRepository, tmp_path: Path
 ) -> None:
-    # The repository fixture only skips the test when Postgres is down; this test needs a shorter timeout.
     log_path = tmp_path / "audit.jsonl"
+    audit_log = AuditLog(log_path)
+    tools = SQLTools(repository, audit_log)
+    tools.execute_sql("SELECT count(*) FROM orders", CONTEXT)
+
+    with pytest.raises(SQLRejected):
+        tools.execute_sql("DELETE FROM orders", CONTEXT)
+
+    with pytest.raises(ExecutionError):
+        tools.execute_sql("SELECT nope FROM orders", CONTEXT)
+
+    # Only the slow query gets the short time limit, so a busy machine cannot time out the others.
     fast = settings.model_copy(update={"statement_timeout_ms": 200})
 
-    with DeliveryRepository(fast) as fast_repository:
-        tools = SQLTools(fast_repository, AuditLog(log_path))
-        tools.execute_sql("SELECT count(*) FROM orders", CONTEXT)
-
-        with pytest.raises(SQLRejected):
-            tools.execute_sql("DELETE FROM orders", CONTEXT)
-
-        with pytest.raises(ExecutionError):
-            tools.execute_sql("SELECT nope FROM orders", CONTEXT)
-
-        with pytest.raises(QueryTimeout):
-            tools.execute_sql("SELECT count(*) FROM orders a, orders b, orders c", CONTEXT)
+    with DeliveryRepository(fast) as fast_repository, pytest.raises(QueryTimeout):
+        SQLTools(fast_repository, audit_log).execute_sql(
+            "SELECT count(*) FROM orders a, orders b, orders c", CONTEXT
+        )
 
     records = read_log(log_path)
 
