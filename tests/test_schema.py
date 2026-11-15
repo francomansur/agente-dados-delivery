@@ -5,8 +5,9 @@ import pytest
 
 from delivery_agent.core.audit import AuditLog
 from delivery_agent.core.settings import Settings
-from delivery_agent.repositories.delivery_repository import Database
+from delivery_agent.repositories.delivery_repository import DeliveryRepository
 from delivery_agent.seed import TABLE_COLUMNS
+from delivery_agent.services.sql_tools import SQLTools
 
 pytestmark = pytest.mark.db
 
@@ -75,8 +76,8 @@ def test_integrity(admin_conn: psycopg.Connection) -> None:
     assert different_city == (0,)
 
 
-def test_shows_only_allowed_objects(database: Database) -> None:
-    description = database.describe_schema()
+def test_shows_only_allowed_objects(tools: SQLTools) -> None:
+    description = tools.describe_schema()
 
     for relation in AGENT_RELATIONS:
         assert f"## {relation} (" in description
@@ -90,12 +91,12 @@ def test_shows_only_allowed_objects(database: Database) -> None:
 def test_is_deterministic(settings: Settings, tmp_path: Path) -> None:
     audit_log = AuditLog(tmp_path / "audit.jsonl")
 
-    with Database(settings, audit_log) as first, Database(settings, audit_log) as second:
-        assert first.describe_schema() == second.describe_schema()
+    with DeliveryRepository(settings) as first, DeliveryRepository(settings) as second:
+        assert SQLTools(first, audit_log).describe_schema() == SQLTools(second, audit_log).describe_schema()
 
 
-def test_includes_examples_and_glossary(database: Database) -> None:
-    description = database.describe_schema()
+def test_includes_examples_and_glossary(tools: SQLTools) -> None:
+    description = tools.describe_schema()
 
     assert "'credit_card'" in description
     assert "'Japonesa'" in description

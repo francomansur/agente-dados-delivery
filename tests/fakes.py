@@ -1,6 +1,6 @@
-"""Test doubles for the language model and the database."""
+"""Test doubles for the language model, the SQL tools and the repository."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
@@ -8,7 +8,7 @@ from delivery_agent.core.audit import QueryContext
 from delivery_agent.core.errors import DatabaseUnavailable
 from delivery_agent.llm.client import Effort, ModelCall, TokenUsage
 from delivery_agent.llm.prompts import FinalAnswer, SQLDraft, Understanding
-from delivery_agent.repositories.delivery_repository import QueryResult
+from delivery_agent.repositories.delivery_repository import Cell, QueryResult, Relation
 from delivery_agent.services.sql_validator import validate_sql
 
 USAGE = TokenUsage(input_tokens=100, output_tokens=50, cache_read_tokens=1000, calls=1)
@@ -53,8 +53,8 @@ class FakeModel:
         return ModelCall(output=reply, stop_reason="end_turn", usage=USAGE)
 
 
-class FakeDatabase:
-    """Runs the real validator but answers from a script instead of Postgres.
+class FakeSQLTools:
+    """Stands in for ``SQLTools``: runs the real validator but answers from a script, not Postgres.
 
     ``outcomes`` maps a fragment of the SQL to the result or exception it produces; any other
     query returns one row with the number 1.
@@ -89,8 +89,43 @@ class FakeDatabase:
 
         return QueryResult(sql=sql, columns=["n"], rows=[[1]], truncated=False, duration_ms=1.0)
 
+
+@dataclass
+class FakeRepository:
+    """Stands in for ``DeliveryRepository``: answers without Postgres and records every query.
+
+    ``select`` returns one row with the number 1, or raises ``error``. The catalog has the
+    ``relations`` given, the ``values`` of each text column and one range for every date column.
+    """
+
+    relations: list[Relation] = field(default_factory=list)
+    values: dict[str, list[str]] = field(default_factory=dict)
+    error: Exception | None = None
+    healthy: bool = True
+    selected: list[tuple[str, int]] = field(default_factory=list)
+    catalog_reads: int = 0
+
     def ping(self) -> bool:
         return self.healthy
 
     def close(self) -> None:
         pass
+
+    def select(self, query: str, *, max_rows: int) -> QueryResult:
+        self.selected.append((query, max_rows))
+
+        if self.error is not None:
+            raise self.error
+
+        return QueryResult(sql=query, columns=["n"], rows=[[1]], truncated=False, duration_ms=1.0)
+
+    def list_relations(self) -> list[Relation]:
+        self.catalog_reads += 1
+
+        return self.relations
+
+    def distinct_values(self, relation: str, column: str, *, limit: int) -> list[str]:
+        return self.values[column][:limit]
+
+    def value_range(self, relation: str, column: str) -> tuple[Cell, Cell]:
+        return "2026-01-01 00:05:00", "2026-10-31 23:55:00"

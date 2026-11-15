@@ -26,7 +26,7 @@ Status = Literal["answered", "refused", "failed"]
 
 
 class SQLRunner(Protocol):
-    """What the graph needs from the database. ``Database`` implements it; the tests use a fake."""
+    """What the graph needs to read the database. ``SQLTools`` implements it; the tests use a fake."""
 
     def describe_schema(self) -> str:
         """Describe the tables, views and metrics the agent can use."""

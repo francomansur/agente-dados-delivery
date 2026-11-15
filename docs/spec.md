@@ -256,7 +256,7 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 | ID | Prova |
 |----|-------|
 | QLT-01, QLT-02 | Jobs de mypy e ruff no CI |
-| QLT-03 | `test_executor.py::test_input_is_validated` e `test_settings.py` |
+| QLT-03 | `test_sql_tools.py::test_input_is_validated` e `test_settings.py` |
 | QLT-04 | `--cov-fail-under=85` no CI |
 | DB-01 | `test_schema.py::test_schema_matches_spec` (db) |
 | DB-02 | `test_seed.py::test_same_seed_same_data`, `test_counts_match_spec` e `test_personal_data_is_fictional` |
@@ -267,9 +267,9 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 | SEC-02 | `test_db_security.py::test_role_settings` e `test_slow_query_is_canceled` (db) |
 | SEC-03 | `test_db_security.py::test_set_config_is_revoked` e `test_transaction_is_read_only` (db) |
 | VAL-01 a VAL-06 | `test_sql_validator.py`, com casos para cada regra, inclusive tentativas de burlar com strings, comentários e aspas |
-| EXE-01, EXE-02 | `test_executor.py` (db) |
+| EXE-01, EXE-02 | `test_delivery_repository.py` (db), sem o validador na frente, e `test_sql_tools.py`, com o caminho completo |
 | SCH-01 a SCH-04 | `test_schema.py::test_shows_only_allowed_objects`, `test_every_table_and_column_has_comment`, `test_is_deterministic` e `test_includes_examples_and_glossary` (db) |
-| AUD-01 | `test_audit.py::test_every_execution_is_logged` (db) |
+| AUD-01 | `test_sql_tools.py::test_every_execution_is_logged` (db) e `test_audit.py` |
 | CI-01, CI-02 | `.github/workflows/ci.yml` passando no GitHub, sem a chave da Anthropic |
 | GRA-01 | `test_graph.py::test_out_of_scope_is_refused_without_sql` e avaliação: Q20 |
 | GRA-02 | Avaliação: Q17, Q18 e Q19 |

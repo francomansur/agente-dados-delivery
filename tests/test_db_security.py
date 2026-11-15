@@ -5,13 +5,11 @@ import time
 import psycopg
 import pytest
 
-from delivery_agent.core.audit import QueryContext
 from delivery_agent.core.settings import Settings
-from delivery_agent.repositories.delivery_repository import Database
+from delivery_agent.repositories.delivery_repository import DeliveryRepository
 
 pytestmark = pytest.mark.db
 
-CONTEXT = QueryContext(request_id="test", source="eval")
 WRITES = [
     "INSERT INTO reviews (id, order_id, rating, created_at) VALUES (999999, 1, 5, now())",
     "UPDATE orders SET total = 0 WHERE id = 1",
@@ -75,11 +73,11 @@ def test_set_config_is_revoked(agent_conn: psycopg.Connection) -> None:
         agent_conn.execute("SELECT set_config('statement_timeout', '0', false)")
 
 
-def test_transaction_is_read_only(database: Database) -> None:
-    result = database.execute_sql(
+def test_transaction_is_read_only(repository: DeliveryRepository) -> None:
+    result = repository.select(
         "SELECT current_setting('transaction_read_only') AS read_only, "
         "current_setting('statement_timeout') AS timeout",
-        CONTEXT,
+        max_rows=100,
     )
 
     assert result.rows == [["on", "5s"]]

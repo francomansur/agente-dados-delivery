@@ -1,8 +1,9 @@
 """Entry point of the API: create the FastAPI app, assemble its dependencies and include the routes.
 
 This is the only module that knows the concrete classes of every layer. When the api starts, the
-lifespan builds the database access, the audit log and the Claude client from the settings; when it
-stops, it closes the database connections. The routes receive these objects through ``Depends``.
+lifespan builds the repository, the SQL tools (with the audit log) and the Claude client from the
+settings; when it stops, it closes the database connections. The routes receive these objects
+through ``Depends``.
 
 Run it with ``uvicorn delivery_agent.main:app``.
 """
@@ -21,8 +22,9 @@ from delivery_agent.core.audit import AuditLog
 from delivery_agent.core.errors import MissingAPIKey
 from delivery_agent.core.settings import Settings
 from delivery_agent.llm.client import AnthropicModel, LanguageModel
-from delivery_agent.repositories.delivery_repository import Database
+from delivery_agent.repositories.delivery_repository import DeliveryRepository
 from delivery_agent.services.question_service import QuestionService
+from delivery_agent.services.sql_tools import SQLTools
 
 MISSING_KEY = (
     "A chave da API da Anthropic não está configurada. Defina ANTHROPIC_API_KEY no .env e reinicie a api."
@@ -38,13 +40,14 @@ responde mostrando o SQL e as linhas usadas."""
 class Services:
     """The objects behind the routes, built once when the api starts. The tests build it with fakes."""
 
-    database: Database
+    repository: DeliveryRepository
+    tools: SQLTools
     model: LanguageModel | None  # None when ANTHROPIC_API_KEY is missing
     questions: QuestionService | None = None
 
     @classmethod
     def from_settings(cls, settings: Settings) -> Services:
-        """Open the connection pool and create the model client from the settings.
+        """Open the connection pool and create the SQL tools and the model client from the settings.
 
         Args:
             settings: Application settings.
@@ -52,14 +55,15 @@ class Services:
         Returns:
             The services, with no model when ``ANTHROPIC_API_KEY`` is missing.
         """
-        database = Database(settings, AuditLog(settings.audit_log_path))
-        database.open(wait=False)
+        repository = DeliveryRepository(settings)
+        repository.open(wait=False)
+        tools = SQLTools(repository, AuditLog(settings.audit_log_path))
         api_key = settings.anthropic_api_key
         model = (
             AnthropicModel(api_key.get_secret_value(), settings.llm_model) if api_key is not None else None
         )
 
-        return cls(database=database, model=model)
+        return cls(repository=repository, tools=tools, model=model)
 
     def question_service(self) -> QuestionService:
         """Return the question service, building its graph on the first question.
@@ -75,17 +79,17 @@ class Services:
             raise MissingAPIKey(MISSING_KEY)
 
         if self.questions is None:
-            self.questions = QuestionService(self.database, self.model)
+            self.questions = QuestionService(self.tools, self.model)
 
         return self.questions
 
     def database_is_up(self) -> bool:
         """Check that the database answers."""
-        return self.database.ping()
+        return self.repository.ping()
 
     def close(self) -> None:
         """Close the database connections."""
-        self.database.close()
+        self.repository.close()
 
 
 def create_app(services: Services | None = None) -> FastAPI:

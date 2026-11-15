@@ -16,7 +16,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from delivery_agent.core.audit import AuditLog
 from delivery_agent.core.settings import Settings
-from delivery_agent.repositories.delivery_repository import Database
+from delivery_agent.repositories.delivery_repository import DeliveryRepository
+from delivery_agent.services.sql_tools import SQLTools
 
 
 class AdminSettings(BaseSettings):
@@ -52,11 +53,16 @@ def audit_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture(scope="session")
-def database(settings: Settings, audit_path: Path) -> Iterator[Database]:
+def repository(settings: Settings) -> Iterator[DeliveryRepository]:
     _require_database(settings)
 
-    with Database(settings, AuditLog(audit_path)) as db:
-        yield db
+    with DeliveryRepository(settings) as repository:
+        yield repository
+
+
+@pytest.fixture(scope="session")
+def tools(repository: DeliveryRepository, audit_path: Path) -> SQLTools:
+    return SQLTools(repository, AuditLog(audit_path))
 
 
 @pytest.fixture

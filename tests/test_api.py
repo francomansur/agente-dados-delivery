@@ -1,17 +1,15 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
-from pathlib import Path
 
 import anthropic
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
-from delivery_agent.core.audit import AuditLog
 from delivery_agent.core.settings import Settings
 from delivery_agent.main import Services, app, create_app
-from delivery_agent.repositories.delivery_repository import Database
-from fakes import COUNT_SQL, DONE, QUERY, FakeDatabase, FakeModel
+from delivery_agent.repositories.delivery_repository import DeliveryRepository
+from fakes import COUNT_SQL, DONE, QUERY, FakeModel, FakeRepository, FakeSQLTools
 
 FIELDS = {
     "request_id",
@@ -29,9 +27,16 @@ FIELDS = {
 
 @contextmanager
 def client_for(
-    model: FakeModel | None, database: FakeDatabase | Database | None = None
+    model: FakeModel | None,
+    *,
+    tools: FakeSQLTools | None = None,
+    repository: FakeRepository | DeliveryRepository | None = None,
 ) -> Iterator[TestClient]:
-    services = Services(database=database or FakeDatabase(), model=model)  # type: ignore[arg-type]
+    services = Services(
+        repository=repository or FakeRepository(),  # type: ignore[arg-type]
+        tools=tools or FakeSQLTools(),  # type: ignore[arg-type]
+        model=model,  # type: ignore[arg-type]
+    )
 
     # The context manager runs the lifespan, which hands the services to the routes.
     with TestClient(create_app(services)) as client:
@@ -83,7 +88,7 @@ def test_model_api_error_returns_502() -> None:
 
 
 def test_database_down_returns_503() -> None:
-    with client_for(FakeModel(QUERY, COUNT_SQL, DONE), FakeDatabase(healthy=False)) as client:
+    with client_for(FakeModel(QUERY, COUNT_SQL, DONE), tools=FakeSQLTools(healthy=False)) as client:
         response = client.post("/questions", json={"question": "Quantos pedidos há?"})
 
     assert response.status_code == 503
@@ -91,7 +96,7 @@ def test_database_down_returns_503() -> None:
 
 
 def test_health_reports_a_database_that_is_down() -> None:
-    with client_for(None, FakeDatabase(healthy=False)) as client:
+    with client_for(None, repository=FakeRepository(healthy=False)) as client:
         response = client.get("/health")
 
     assert response.status_code == 503
@@ -108,7 +113,7 @@ def test_docs_have_examples() -> None:
 
 
 @pytest.mark.db
-def test_health(database: Database) -> None:
+def test_health(repository: DeliveryRepository) -> None:
     # The app that uvicorn runs: its lifespan builds the services from the settings. The fixture only
     # skips the test when Postgres is down.
     with TestClient(app) as client:
@@ -118,12 +123,12 @@ def test_health(database: Database) -> None:
     assert response.json() == {"status": "ok", "detail": None}
 
 
-def test_health_with_an_unreachable_database(settings: Settings, tmp_path: Path) -> None:
+def test_health_with_an_unreachable_database(settings: Settings) -> None:
     unreachable = settings.model_copy(update={"database_port": 1})
-    database = Database(unreachable, AuditLog(tmp_path / "audit.jsonl"))
-    database.open(wait=False)
+    repository = DeliveryRepository(unreachable)
+    repository.open(wait=False)
 
-    with client_for(None, database) as client:
+    with client_for(None, repository=repository) as client:
         response = client.get("/health")
 
     assert response.status_code == 503

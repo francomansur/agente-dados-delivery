@@ -1,12 +1,14 @@
-"""Read-only access to Postgres for the agent: run model-written SQL and describe the schema.
+"""Read-only access to the delivery database: the only module that runs SQL on Postgres.
 
-Every query runs as ``agent_reader`` (security layers 1 and 2) after the validator (layer 3),
-and every execution, approved or rejected, goes to the audit log (layer 4).
+The connections use ``agent_reader``, the read-only role (security layers 1 and 2), and each
+transaction is read-only and has its own time limit. The repository runs the SQL it receives as it
+is: checking the model's SQL and logging it are jobs of ``services.sql_tools``.
 """
 
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -15,38 +17,12 @@ import psycopg
 from psycopg import sql
 from psycopg.rows import TupleRow
 from psycopg_pool import ConnectionPool, PoolTimeout
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel
 
-from delivery_agent.core.audit import AuditLog, AuditRecord, AuditStatus, QueryContext
-from delivery_agent.core.errors import (
-    DatabaseUnavailable,
-    ExecutionError,
-    QueryTimeout,
-    SQLError,
-    SQLRejected,
-)
+from delivery_agent.core.errors import DatabaseUnavailable, ExecutionError, QueryTimeout
 from delivery_agent.core.settings import Settings
-from delivery_agent.services.sql_validator import MAX_ROWS, validate_sql
-
-MAX_SQL_LENGTH = 10_000
 
 Cell = str | int | float | bool | None
-
-GLOSSARY_LINES = (
-    "## Glossário de métricas",
-    "",
-    "- **Pedidos**, sem qualificação: todos os pedidos, inclusive os cancelados. "
-    "**Pedidos entregues:** `status = 'delivered'`.",
-    "- **Faturamento:** soma de `orders.total` dos pedidos entregues.",
-    "- **Ticket médio:** média de `orders.total` dos pedidos entregues.",
-    "- **Taxa de cancelamento:** pedidos cancelados divididos por todos os pedidos.",
-    "- **Pedido atrasado:** pedido entregue com `delivery_minutes > promised_minutes`. "
-    "**Taxa de atraso:** atrasados divididos pelos entregues.",
-    "- **Tempo de entrega:** `orders.delivery_minutes`, só de pedidos entregues.",
-    "- **Itens vendidos:** soma de `order_items.quantity` dos pedidos entregues.",
-    "- **Cidade de um pedido:** a cidade do restaurante.",
-    "- **Dia da semana:** `EXTRACT(DOW FROM created_at)`, em que 0 é domingo e 6 é sábado.",
-)
 
 _RELATIONS_QUERY = """
     SELECT c.oid, c.relname, c.relkind, COALESCE(obj_description(c.oid, 'pg_class'), '')
@@ -68,16 +44,6 @@ _COLUMNS_QUERY = """
 """
 
 
-class SQLInput(BaseModel):
-    """Input of the ``execute_sql`` tool."""
-
-    sql: str = Field(
-        min_length=1,
-        max_length=MAX_SQL_LENGTH,
-        description="Uma única consulta SELECT no dialeto do Postgres.",
-    )
-
-
 class QueryResult(BaseModel):
     """Result of one query, ready to show to people or to send to the model."""
 
@@ -88,12 +54,31 @@ class QueryResult(BaseModel):
     duration_ms: float
 
 
-class Database:
-    """Pool of read-only connections used by the agent."""
+@dataclass(frozen=True)
+class Column:
+    """One column of a table or view, as the Postgres catalog describes it."""
 
-    def __init__(self, settings: Settings, audit_log: AuditLog) -> None:
+    name: str
+    data_type: str
+    comment: str
+    category: str  # Postgres type category: S for text, D for dates and times, N for numbers
+
+
+@dataclass(frozen=True)
+class Relation:
+    """A table or view that the read-only role can read."""
+
+    name: str
+    is_view: bool
+    comment: str
+    columns: list[Column]
+
+
+class DeliveryRepository:
+    """Pool of read-only connections to the delivery database."""
+
+    def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._audit_log = audit_log
         self._pool: ConnectionPool[psycopg.Connection[TupleRow]] = ConnectionPool(
             settings.agent_conninfo(),
             min_size=1,
@@ -102,7 +87,6 @@ class Database:
             configure=_configure,
             timeout=10,
         )
-        self._schema_description: str | None = None
 
     def open(self, *, wait: bool = True) -> None:
         """Open the connection pool.
@@ -123,7 +107,7 @@ class Database:
         """Close every connection of the pool."""
         self._pool.close()
 
-    def __enter__(self) -> Database:
+    def __enter__(self) -> DeliveryRepository:
         self.open()
 
         return self
@@ -145,77 +129,25 @@ class Database:
 
         return True
 
-    def validate(self, sql_text: str, context: QueryContext) -> str:
-        """Run the input checks and the validator, logging any rejection.
+    def select(self, query: str, *, max_rows: int) -> QueryResult:
+        """Run one read-only query and fetch at most ``max_rows`` rows.
+
+        The query runs as it is: the caller checks it first. Even so, the transaction is read-only,
+        has a time limit, and Postgres accepts a single statement per call.
 
         Args:
-            sql_text: SQL written by the model.
-            context: Request that asked for the query, for the audit log.
+            query: One SQL statement.
+            max_rows: Maximum number of rows to return.
 
         Returns:
-            The SQL to run, with ``LIMIT 101`` when the outer query has no limit.
+            The query, its columns, at most ``max_rows`` rows, whether there were more rows, and how
+            long it took.
 
         Raises:
-            SQLRejected: The input or the validator blocked the query.
-        """
-        started = time.monotonic()
-
-        try:
-            return validate_sql(_parse_input(sql_text).sql)
-        except SQLRejected as error:
-            self._log(context, sql_text, "rejected", started, row_count=None, error=str(error))
-
-            raise
-
-    def execute_sql(self, sql_text: str, context: QueryContext) -> QueryResult:
-        """Validate and run one model-written query as the read-only role.
-
-        Args:
-            sql_text: SQL written by the model.
-            context: Request that asked for the query, for the audit log.
-
-        Returns:
-            Columns, at most 100 rows, whether there were more rows, and how long the query took.
-
-        Raises:
-            SQLRejected: The input or the validator blocked the query.
             QueryTimeout: The query ran past the time limit.
             ExecutionError: Postgres refused or failed to run the query.
             DatabaseUnavailable: The database cannot be reached.
         """
-        validated_sql = self.validate(sql_text, context)
-        started = time.monotonic()
-
-        try:
-            result = self._run(validated_sql)
-        except (SQLError, DatabaseUnavailable) as error:
-            self._log(context, validated_sql, _audit_status(error), started, row_count=None, error=str(error))
-
-            raise
-
-        self._log(context, result.sql, "ok", started, row_count=len(result.rows), error=None)
-
-        return result
-
-    def describe_schema(self) -> str:
-        """Describe what the agent can read, for the system prompt of the model.
-
-        The text lists tables and views, columns, types, comments and sample values, and ends
-        with the metrics glossary. It is built once per process and is deterministic: the same
-        database always gives the same text.
-
-        Returns:
-            Text in Portuguese, with the identifiers in English.
-
-        Raises:
-            DatabaseUnavailable: The database cannot be reached.
-        """
-        if self._schema_description is None:
-            self._schema_description = self._build_schema_description()
-
-        return self._schema_description
-
-    def _run(self, validated_sql: str) -> QueryResult:
         timeout = sql.SQL("SET LOCAL statement_timeout = {}").format(
             sql.Literal(f"{self._settings.statement_timeout_ms}ms")
         )
@@ -224,7 +156,7 @@ class Database:
         try:
             with self._pool.connection() as conn, conn.transaction(force_rollback=True):
                 conn.execute(timeout)
-                columns, rows, truncated = fetch_rows(conn, validated_sql, MAX_ROWS)
+                columns, rows, truncated = _fetch_rows(conn, query, max_rows)
         except psycopg.errors.QueryCanceled as error:
             seconds = f"{self._settings.statement_timeout_ms / 1000:g}".replace(".", ",")
 
@@ -240,76 +172,87 @@ class Database:
         duration_ms = round((time.monotonic() - started) * 1000, 1)
 
         return QueryResult(
-            sql=validated_sql, columns=columns, rows=rows, truncated=truncated, duration_ms=duration_ms
+            sql=query, columns=columns, rows=rows, truncated=truncated, duration_ms=duration_ms
         )
 
-    def _build_schema_description(self) -> str:
-        parts = [
-            "# Base de um marketplace de delivery (dados fictícios)",
-            "",
-            "Banco PostgreSQL: escreva as consultas no dialeto do Postgres. "
-            "Estas são as tabelas e views que você pode consultar.",
-        ]
+    def list_relations(self) -> list[Relation]:
+        """List the tables and views that the read-only role can read, with their columns.
+
+        Returns:
+            The relations in alphabetical order, each with its comment and its columns in table order.
+
+        Raises:
+            DatabaseUnavailable: The database cannot be reached.
+        """
+        relations: list[Relation] = []
 
         try:
             with self._pool.connection() as conn, conn.transaction(force_rollback=True):
                 for oid, name, kind, comment in conn.execute(_RELATIONS_QUERY).fetchall():
-                    parts += ["", f"## {name} ({'view' if kind == 'v' else 'tabela'})", comment]
-
-                    for column, data_type, column_comment, category in conn.execute(
-                        _COLUMNS_QUERY, (oid,)
-                    ).fetchall():
-                        details = _column_details(conn, name, column, category)
-                        parts.append(f"- {column} ({data_type}): {column_comment}{details}")
+                    columns = [Column(*row) for row in conn.execute(_COLUMNS_QUERY, (oid,)).fetchall()]
+                    relations.append(
+                        Relation(name=name, is_view=kind == "v", comment=comment, columns=columns)
+                    )
         except (psycopg.Error, PoolTimeout) as error:
-            raise DatabaseUnavailable(f"Não consegui ler o schema do banco: {error}") from error
+            raise _schema_unavailable(error) from error
 
-        parts += ["", *GLOSSARY_LINES]
+        return relations
 
-        return "\n".join(parts) + "\n"
+    def distinct_values(self, relation: str, column: str, *, limit: int) -> list[str]:
+        """Read the first distinct values of a column, in order and without nulls.
 
-    def _log(
-        self,
-        context: QueryContext,
-        sql_text: str,
-        status: AuditStatus,
-        started: float,
-        *,
-        row_count: int | None,
-        error: str | None,
-    ) -> None:
-        self._audit_log.record(
-            AuditRecord(
-                request_id=context.request_id,
-                source=context.source,
-                question=context.question,
-                sql=sql_text,
-                status=status,
-                duration_ms=round((time.monotonic() - started) * 1000, 1),
-                row_count=row_count,
-                error=error,
-            )
+        Args:
+            relation: Table or view.
+            column: Column of that relation.
+            limit: Maximum number of values.
+
+        Returns:
+            The values, as text.
+
+        Raises:
+            DatabaseUnavailable: The database cannot be reached.
+        """
+        query = sql.SQL("SELECT DISTINCT {c} FROM {t} WHERE {c} IS NOT NULL ORDER BY 1 LIMIT {n}").format(
+            c=sql.Identifier(column), t=sql.Identifier(relation), n=sql.Literal(limit)
         )
 
+        return [str(row[0]) for row in self._read_catalog(query)]
 
-def fetch_rows(
+    def value_range(self, relation: str, column: str) -> tuple[Cell, Cell]:
+        """Read the smallest and the largest value of a column.
+
+        Args:
+            relation: Table or view.
+            column: Column of that relation.
+
+        Returns:
+            The minimum and the maximum, with dates as ISO text.
+
+        Raises:
+            DatabaseUnavailable: The database cannot be reached.
+        """
+        query = sql.SQL("SELECT MIN({c}), MAX({c}) FROM {t}").format(
+            c=sql.Identifier(column), t=sql.Identifier(relation)
+        )
+        first, last = self._read_catalog(query)[0]
+
+        return _to_cell(first), _to_cell(last)
+
+    def _read_catalog(self, query: sql.Composed) -> list[TupleRow]:
+        try:
+            with self._pool.connection() as conn, conn.transaction(force_rollback=True):
+                return conn.execute(query).fetchall()
+        except (psycopg.Error, PoolTimeout) as error:
+            raise _schema_unavailable(error) from error
+
+
+def _fetch_rows(
     conn: psycopg.Connection[Any], query: str, max_rows: int
 ) -> tuple[list[str], list[list[Cell]], bool]:
-    """Run one statement and fetch at most ``max_rows`` rows.
+    """Run one statement and fetch at most ``max_rows`` rows, plus one to know whether there were more.
 
     ``binary=True`` makes psycopg use the extended query protocol, in which Postgres refuses more
     than one statement per call: a second barrier behind the validator.
-
-    Args:
-        conn: Open connection, inside a transaction.
-        query: SQL already approved by the validator.
-        max_rows: Maximum number of rows to return.
-
-    Returns:
-        Column names, rows with JSON-friendly values, and whether there were more rows.
-
-    Raises:
-        psycopg.Error: Postgres refused or failed to run the statement.
     """
     with conn.cursor() as cursor:
         # The SQL comes from the model by design: it was validated and runs read-only with minimal privileges.
@@ -324,17 +267,6 @@ def fetch_rows(
 
 def _configure(conn: psycopg.Connection[TupleRow]) -> None:
     conn.read_only = True
-
-
-def _parse_input(sql_text: str) -> SQLInput:
-    try:
-        return SQLInput(sql=sql_text)
-    except ValidationError as error:
-        limit = f"{MAX_SQL_LENGTH:,}".replace(",", ".")
-
-        raise SQLRejected(
-            f"A consulta precisa ter entre 1 e {limit} caracteres. Escreva uma consulta mais curta."
-        ) from error
 
 
 def _to_cell(value: object) -> Cell:
@@ -362,41 +294,5 @@ def _postgres_message(error: psycopg.Error) -> str:
     return message
 
 
-def _audit_status(error: Exception) -> AuditStatus:
-    if isinstance(error, SQLRejected):
-        return "rejected"
-
-    if isinstance(error, QueryTimeout):
-        return "timeout"
-
-    return "error"
-
-
-def _column_details(conn: psycopg.Connection[TupleRow], table: str, column: str, category: str) -> str:
-    """Sample values of one column: every value of short text lists, a few examples, or the date range."""
-    table_id, column_id = sql.Identifier(table), sql.Identifier(column)
-
-    if category == "S":
-        query = sql.SQL("SELECT DISTINCT {c} FROM {t} WHERE {c} IS NOT NULL ORDER BY 1 LIMIT 16").format(
-            c=column_id, t=table_id
-        )
-        values = [_quote(str(row[0])) for row in conn.execute(query).fetchall()]
-
-        if len(values) <= 15:
-            return f" Valores: {', '.join(values)}."
-
-        return f" Exemplos: {', '.join(values[:3])}."
-
-    if category == "D":
-        query = sql.SQL("SELECT MIN({c}), MAX({c}) FROM {t}").format(c=column_id, t=table_id)
-        first, last = conn.execute(query).fetchone() or (None, None)
-
-        return f" De {_to_cell(first)} a {_to_cell(last)}."
-
-    return ""
-
-
-def _quote(value: str) -> str:
-    escaped = value.replace("'", "''")
-
-    return f"'{escaped}'"
+def _schema_unavailable(error: Exception) -> DatabaseUnavailable:
+    return DatabaseUnavailable(f"Não consegui ler o schema do banco: {error}")

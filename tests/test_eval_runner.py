@@ -9,7 +9,7 @@ from delivery_agent.llm.prompts import Understanding
 from delivery_agent.services.question_service import AgentAnswer, QuestionService
 from evals.cases import Case
 from evals.run import confirm_spending, estimate_cost, run_evaluation, spent_so_far, summarize
-from fakes import COUNT_SQL, DONE, QUERY, FakeDatabase, FakeModel
+from fakes import COUNT_SQL, DONE, QUERY, FakeModel, FakeSQLTools
 
 COUNT = Case(id="C1", question="Quantos pedidos há?", kind="easy", reference_sql="SELECT 1")
 REFUSE = Case(id="C2", question="Qual o telefone do cliente?", kind="refusal")
@@ -17,7 +17,7 @@ REFERENCES = {"C1": [[1]]}
 
 
 def service_with(*script: object) -> QuestionService:
-    return QuestionService(FakeDatabase(), FakeModel(*script))  # type: ignore[arg-type]
+    return QuestionService(FakeSQLTools(), FakeModel(*script))  # type: ignore[arg-type]
 
 
 def test_executions_are_graded_saved_and_summarized(tmp_path: Path) -> None:

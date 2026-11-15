@@ -23,15 +23,15 @@ from pathlib import Path
 from typing import Any
 
 import anthropic
-import psycopg
 from pydantic import BaseModel
 
 from delivery_agent.core.audit import AuditLog
 from delivery_agent.core.errors import DatabaseUnavailable
 from delivery_agent.core.settings import Settings
 from delivery_agent.llm.client import AnthropicModel
-from delivery_agent.repositories.delivery_repository import Cell, Database, fetch_rows
+from delivery_agent.repositories.delivery_repository import Cell, DeliveryRepository
 from delivery_agent.services.question_service import AgentAnswer, QuestionService, UsageReport
+from delivery_agent.services.sql_tools import SQLTools
 from evals.cases import CASES, Case, Kind
 from evals.grading import grade
 
@@ -72,31 +72,24 @@ class RunOutcome:
     stopped_by_budget: bool = False
 
 
-def compute_references(cases: Sequence[Case], conninfo: str) -> dict[str, list[list[Cell]]]:
+def compute_references(cases: Sequence[Case], repository: DeliveryRepository) -> dict[str, list[list[Cell]]]:
     """Run the reference SQL of every answerable question as the read-only role.
+
+    The reference SQL is written by hand, so it goes straight to the repository, without the
+    validator and the audit log that the model's SQL goes through.
 
     Args:
         cases: Evaluation questions.
-        conninfo: Connection string of ``agent_reader``.
+        repository: Read-only access to the database.
 
     Returns:
         The rows of each reference result, keyed by question id.
     """
-    references: dict[str, list[list[Cell]]] = {}
-
-    with psycopg.connect(conninfo) as conn:
-        conn.read_only = True
-
-        for case in cases:
-            if case.reference_sql is None:
-                continue
-
-            with conn.transaction(force_rollback=True):
-                _, rows, _ = fetch_rows(conn, case.reference_sql, 100)
-
-            references[case.id] = rows
-
-    return references
+    return {
+        case.id: repository.select(case.reference_sql, max_rows=100).rows
+        for case in cases
+        if case.reference_sql is not None
+    }
 
 
 def run_evaluation(
@@ -297,12 +290,12 @@ def main(argv: list[str] | None = None) -> int:
     if not confirm_spending(estimate, spent, args.budget, (lambda _: "s") if args.yes else input):
         return 1
 
-    references = compute_references(cases, settings.agent_conninfo())
     model = AnthropicModel(settings.anthropic_api_key.get_secret_value(), settings.llm_model)
     out_dir = RUNS_DIR / f"{datetime.now():%Y-%m-%d_%H%M}_{settings.llm_model}"
 
-    with Database(settings, AuditLog(settings.audit_log_path)) as database:
-        service = QuestionService(database, model)
+    with DeliveryRepository(settings) as repository:
+        references = compute_references(cases, repository)
+        service = QuestionService(SQLTools(repository, AuditLog(settings.audit_log_path)), model)
         outcome = run_evaluation(
             cases,
             references,

@@ -1,6 +1,6 @@
 import pytest
 
-from delivery_agent.core.settings import Settings
+from delivery_agent.repositories.delivery_repository import DeliveryRepository
 from evals.cases import CASES
 from evals.run import compute_references
 from test_eval_grading import REFERENCES
@@ -8,8 +8,8 @@ from test_eval_grading import REFERENCES
 pytestmark = pytest.mark.db
 
 
-def test_reference_sql_gives_the_expected_answers(database: object, settings: Settings) -> None:
-    references = compute_references(CASES, settings.agent_conninfo())
+def test_reference_sql_gives_the_expected_answers(repository: DeliveryRepository) -> None:
+    references = compute_references(CASES, repository)
 
     assert references == REFERENCES
 

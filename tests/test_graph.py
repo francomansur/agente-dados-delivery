@@ -3,15 +3,15 @@ import pytest
 from delivery_agent.core.errors import ExecutionError
 from delivery_agent.llm.prompts import SQLDraft, Understanding
 from delivery_agent.services.question_service import AgentAnswer, QuestionService
-from fakes import COUNT_SQL, DONE, QUERY, FakeDatabase, FakeModel
+from fakes import COUNT_SQL, DONE, QUERY, FakeModel, FakeSQLTools
 
 QUESTION = "Quantos pedidos foram entregues?"
 BROKEN_SQL = SQLDraft(sql="SELECT nope FROM orders")
 MISSING_COLUMN = ExecutionError('Erro do Postgres: column "nope" does not exist')
 
 
-def ask(model: FakeModel, database: FakeDatabase | None = None) -> AgentAnswer:
-    return QuestionService(database or FakeDatabase(), model).ask(QUESTION, source="eval")
+def ask(model: FakeModel, tools: FakeSQLTools | None = None) -> AgentAnswer:
+    return QuestionService(tools or FakeSQLTools(), model).ask(QUESTION, source="eval")
 
 
 def test_question_is_answered_with_sql_and_rows() -> None:
@@ -30,16 +30,16 @@ def test_question_is_answered_with_sql_and_rows() -> None:
 
 def test_out_of_scope_is_refused_without_sql() -> None:
     model = FakeModel(Understanding(intent="out_of_scope", reason="A pergunta pede para apagar dados."))
-    database = FakeDatabase()
+    tools = FakeSQLTools()
 
-    answer = ask(model, database)
+    answer = ask(model, tools)
 
     assert answer.status == "refused"
     assert answer.answer == "A pergunta pede para apagar dados."
     assert answer.sql is None
     assert answer.rows == []
     assert len(model.requests) == 1
-    assert database.executed == []
+    assert tools.executed == []
 
 
 def test_not_answerable_explains_what_is_missing() -> None:
@@ -63,7 +63,7 @@ def test_answer_prompt_receives_the_sql_and_the_rows() -> None:
 def test_sql_error_is_fixed() -> None:
     model = FakeModel(QUERY, BROKEN_SQL, COUNT_SQL, DONE)
 
-    answer = ask(model, FakeDatabase({"nope": MISSING_COLUMN}))
+    answer = ask(model, FakeSQLTools({"nope": MISSING_COLUMN}))
 
     assert answer.status == "answered"
     assert answer.attempts == 2
@@ -73,19 +73,19 @@ def test_sql_error_is_fixed() -> None:
 
 def test_rejected_sql_goes_back_to_the_model_and_never_runs() -> None:
     model = FakeModel(QUERY, SQLDraft(sql="DELETE FROM orders"), COUNT_SQL, DONE)
-    database = FakeDatabase()
+    tools = FakeSQLTools()
 
-    answer = ask(model, database)
+    answer = ask(model, tools)
 
     assert answer.status == "answered"
     assert "recebi um comando DELETE" in model.requests[2].prompt
-    assert all("DELETE" not in sql for sql in database.executed)
+    assert all("DELETE" not in sql for sql in tools.executed)
 
 
 def test_gives_up_after_two_fixes() -> None:
     model = FakeModel(QUERY, BROKEN_SQL, BROKEN_SQL, BROKEN_SQL)
 
-    answer = ask(model, FakeDatabase({"nope": MISSING_COLUMN}))
+    answer = ask(model, FakeSQLTools({"nope": MISSING_COLUMN}))
 
     assert answer.status == "failed"
     assert answer.attempts == 3
