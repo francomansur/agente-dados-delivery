@@ -15,8 +15,8 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from delivery_agent.agent import AgentAnswer
-from delivery_agent.database import Cell
+from delivery_agent.repositories.delivery_repository import Cell
+from delivery_agent.services.question_service import AgentAnswer
 from evals.cases import Case
 
 _NUMBER = re.compile(

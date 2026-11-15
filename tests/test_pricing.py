@@ -1,7 +1,7 @@
 import pytest
 
-from delivery_agent.llm import TokenUsage
-from delivery_agent.pricing import cost_usd
+from delivery_agent.llm.client import TokenUsage
+from delivery_agent.llm.pricing import cost_usd
 
 
 def test_haiku_prices_per_million_tokens() -> None:

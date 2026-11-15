@@ -1,6 +1,6 @@
 import pytest
 
-from delivery_agent.settings import Settings
+from delivery_agent.core.settings import Settings
 from evals.cases import CASES
 from evals.run import compute_references
 from test_eval_grading import REFERENCES

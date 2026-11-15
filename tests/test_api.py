@@ -5,10 +5,10 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
-from delivery_agent.api import Services, create_app
-from delivery_agent.audit import AuditLog
-from delivery_agent.database import Database
-from delivery_agent.settings import Settings
+from delivery_agent.api.routes import Services, create_app
+from delivery_agent.core.audit import AuditLog
+from delivery_agent.core.settings import Settings
+from delivery_agent.repositories.delivery_repository import Database
 from fakes import COUNT_SQL, DONE, QUERY, FakeDatabase, FakeModel
 
 FIELDS = {

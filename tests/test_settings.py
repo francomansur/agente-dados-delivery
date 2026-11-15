@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from delivery_agent.settings import Settings
+from delivery_agent.core.settings import Settings
 
 
 @pytest.fixture(autouse=True)

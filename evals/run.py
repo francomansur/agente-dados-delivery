@@ -26,12 +26,12 @@ import anthropic
 import psycopg
 from pydantic import BaseModel
 
-from delivery_agent.agent import Agent, AgentAnswer, UsageReport
-from delivery_agent.audit import AuditLog
-from delivery_agent.database import Cell, Database, fetch_rows
-from delivery_agent.errors import DatabaseUnavailable
-from delivery_agent.llm import AnthropicModel
-from delivery_agent.settings import Settings
+from delivery_agent.core.audit import AuditLog
+from delivery_agent.core.errors import DatabaseUnavailable
+from delivery_agent.core.settings import Settings
+from delivery_agent.llm.client import AnthropicModel
+from delivery_agent.repositories.delivery_repository import Cell, Database, fetch_rows
+from delivery_agent.services.question_service import Agent, AgentAnswer, UsageReport
 from evals.cases import CASES, Case, Kind
 from evals.grading import grade
 

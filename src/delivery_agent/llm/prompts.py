@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from delivery_agent.database import QueryResult
+from delivery_agent.repositories.delivery_repository import QueryResult
 
 ROLE = """\
 Você é o analista de dados de um marketplace de delivery fictício. Você responde, em português, \

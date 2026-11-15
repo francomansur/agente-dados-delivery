@@ -16,7 +16,7 @@ from sqlglot import exp
 from sqlglot.errors import SqlglotError
 from sqlglot.tokenizer_core import TokenType
 
-from delivery_agent.errors import SQLRejected
+from delivery_agent.core.errors import SQLRejected
 
 MAX_ROWS = 100
 ROW_LIMIT = MAX_ROWS + 1  # fetching one row more than we return tells us the result was cut

@@ -8,11 +8,11 @@ from typing import Annotated, Literal, Protocol, TypedDict
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from delivery_agent import prompts
-from delivery_agent.audit import QueryContext
-from delivery_agent.database import QueryResult
-from delivery_agent.errors import SQLError, SQLRejected
-from delivery_agent.llm import LanguageModel, ModelCall, TokenUsage
+from delivery_agent.core.audit import QueryContext
+from delivery_agent.core.errors import SQLError, SQLRejected
+from delivery_agent.llm import prompts
+from delivery_agent.llm.client import LanguageModel, ModelCall, TokenUsage
+from delivery_agent.repositories.delivery_repository import QueryResult
 
 MAX_FIXES = 2
 

@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from delivery_agent.audit import AuditLog, QueryContext
-from delivery_agent.database import Database
-from delivery_agent.errors import ExecutionError, QueryTimeout, SQLRejected
-from delivery_agent.settings import Settings
+from delivery_agent.core.audit import AuditLog, QueryContext
+from delivery_agent.core.errors import ExecutionError, QueryTimeout, SQLRejected
+from delivery_agent.core.settings import Settings
+from delivery_agent.repositories.delivery_repository import Database
 
 pytestmark = pytest.mark.db
 

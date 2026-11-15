@@ -1,6 +1,6 @@
 """HTTP API: ``POST /questions`` and ``GET /health``, documented at ``/docs``.
 
-Run it with ``uvicorn delivery_agent.api:create_app --factory``.
+Run it with ``uvicorn delivery_agent.api.routes:create_app --factory``.
 """
 
 from __future__ import annotations
@@ -16,13 +16,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from delivery_agent import __version__
-from delivery_agent.agent import Agent, AgentAnswer
-from delivery_agent.audit import AuditLog
-from delivery_agent.database import Database
-from delivery_agent.errors import DatabaseUnavailable
-from delivery_agent.graph import SQLRunner
-from delivery_agent.llm import AnthropicModel, LanguageModel
-from delivery_agent.settings import Settings
+from delivery_agent.core.audit import AuditLog
+from delivery_agent.core.errors import DatabaseUnavailable
+from delivery_agent.core.settings import Settings
+from delivery_agent.llm.client import AnthropicModel, LanguageModel
+from delivery_agent.repositories.delivery_repository import Database
+from delivery_agent.services.graph import SQLRunner
+from delivery_agent.services.question_service import Agent, AgentAnswer
 
 MISSING_KEY = (
     "A chave da API da Anthropic não está configurada. Defina ANTHROPIC_API_KEY no .env e reinicie a api."

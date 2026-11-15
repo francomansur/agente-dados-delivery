@@ -4,12 +4,12 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from delivery_agent.audit import QueryContext
-from delivery_agent.database import QueryResult
-from delivery_agent.errors import DatabaseUnavailable
-from delivery_agent.llm import Effort, ModelCall, TokenUsage
-from delivery_agent.prompts import FinalAnswer, SQLDraft, Understanding
-from delivery_agent.sql_validator import validate_sql
+from delivery_agent.core.audit import QueryContext
+from delivery_agent.core.errors import DatabaseUnavailable
+from delivery_agent.llm.client import Effort, ModelCall, TokenUsage
+from delivery_agent.llm.prompts import FinalAnswer, SQLDraft, Understanding
+from delivery_agent.repositories.delivery_repository import QueryResult
+from delivery_agent.services.sql_validator import validate_sql
 
 USAGE = TokenUsage(input_tokens=100, output_tokens=50, cache_read_tokens=1000, calls=1)
 QUERY = Understanding(intent="query", reason="Dá para responder com os pedidos.")

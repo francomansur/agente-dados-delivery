@@ -3,10 +3,10 @@ from pathlib import Path
 import psycopg
 import pytest
 
-from delivery_agent.audit import AuditLog
-from delivery_agent.database import Database
+from delivery_agent.core.audit import AuditLog
+from delivery_agent.core.settings import Settings
+from delivery_agent.repositories.delivery_repository import Database
 from delivery_agent.seed import TABLE_COLUMNS
-from delivery_agent.settings import Settings
 
 pytestmark = pytest.mark.db
 

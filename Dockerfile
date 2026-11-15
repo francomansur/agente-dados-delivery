@@ -11,4 +11,4 @@ RUN pip install --no-cache-dir . \
 
 USER app
 EXPOSE 8000
-CMD ["uvicorn", "delivery_agent.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "delivery_agent.api.routes:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

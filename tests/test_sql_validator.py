@@ -1,7 +1,7 @@
 import pytest
 
-from delivery_agent.errors import SQLRejected
-from delivery_agent.sql_validator import validate_sql
+from delivery_agent.core.errors import SQLRejected
+from delivery_agent.services.sql_validator import validate_sql
 
 VALID_QUERIES = [
     "SELECT r.city, SUM(o.total) AS revenue FROM orders o JOIN restaurants r ON r.id = o.restaurant_id "

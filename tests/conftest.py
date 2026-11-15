@@ -14,9 +14,9 @@ from psycopg.conninfo import make_conninfo
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from delivery_agent.audit import AuditLog
-from delivery_agent.database import Database
-from delivery_agent.settings import Settings
+from delivery_agent.core.audit import AuditLog
+from delivery_agent.core.settings import Settings
+from delivery_agent.repositories.delivery_repository import Database
 
 
 class AdminSettings(BaseSettings):

@@ -3,9 +3,9 @@ from typing import Any
 
 import pytest
 
-from delivery_agent.agent import Agent
-from delivery_agent.llm import AnthropicModel
-from delivery_agent.prompts import SQLDraft
+from delivery_agent.llm.client import AnthropicModel
+from delivery_agent.llm.prompts import SQLDraft
+from delivery_agent.services.question_service import Agent
 from fakes import COUNT_SQL, DONE, QUERY, FakeDatabase, FakeModel
 
 

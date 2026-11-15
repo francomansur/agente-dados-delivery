@@ -1,8 +1,8 @@
 import pytest
 
-from delivery_agent.agent import Agent, AgentAnswer
-from delivery_agent.errors import ExecutionError
-from delivery_agent.prompts import SQLDraft, Understanding
+from delivery_agent.core.errors import ExecutionError
+from delivery_agent.llm.prompts import SQLDraft, Understanding
+from delivery_agent.services.question_service import Agent, AgentAnswer
 from fakes import COUNT_SQL, DONE, QUERY, FakeDatabase, FakeModel
 
 QUESTION = "Quantos pedidos foram entregues?"

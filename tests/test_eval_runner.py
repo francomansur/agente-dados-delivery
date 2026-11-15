@@ -5,8 +5,8 @@ import anthropic
 import httpx2
 import pytest
 
-from delivery_agent.agent import Agent, AgentAnswer
-from delivery_agent.prompts import Understanding
+from delivery_agent.llm.prompts import Understanding
+from delivery_agent.services.question_service import Agent, AgentAnswer
 from evals.cases import Case
 from evals.run import confirm_spending, estimate_cost, run_evaluation, spent_so_far, summarize
 from fakes import COUNT_SQL, DONE, QUERY, FakeDatabase, FakeModel

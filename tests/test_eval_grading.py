@@ -1,7 +1,7 @@
 import pytest
 
-from delivery_agent.agent import AgentAnswer, UsageReport
-from delivery_agent.database import Cell
+from delivery_agent.repositories.delivery_repository import Cell
+from delivery_agent.services.question_service import AgentAnswer, UsageReport
 from evals.cases import CASES, Case
 from evals.grading import grade, number_values
 
