@@ -215,7 +215,7 @@ flowchart TD
 
 | ID | Requisito |
 |----|-----------|
-| API-01 | `POST /questions` recebe `{"question": "..."}`, com 3 a 500 caracteres, e devolve `request_id`, `status` (`answered`, `refused` ou `failed`), `answer`, `columns`, `rows` e `truncated`. Os detalhes técnicos vêm só quando pedidos (API-05). |
+| API-01 | `POST /questions` recebe `{"question": "..."}`, com 3 a 500 caracteres, e devolve `request_id`, `status` (`answered`, `refused`, `failed` ou, num pedido de avaliação, `pending_approval`), `answer`, `columns`, `rows` e `truncated`. Os detalhes técnicos vêm só quando pedidos (API-05), e a ação pendente só quando existe (EXT-01). |
 | API-02 | `GET /health` responde 200 quando a api e o banco respondem, e 503 quando o banco está fora. Não chama o modelo. |
 | API-03 | `/docs` documenta as rotas, com exemplos de pergunta e de resposta. |
 | API-04 | Sem a chave da Anthropic, `POST /questions` responde 503 com uma explicação, e com o banco fora do ar também. Um erro na API do modelo, depois das novas tentativas do SDK, vira 502. Uma pergunta inválida vira 422. |
@@ -328,5 +328,5 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 | EVA-04, EVA-08 | `test_eval_runner.py::test_infra_error_is_not_scored` e `test_asks_before_spending` |
 | EVA-06, EVA-07 | `test_eval_compare.py` |
 | RDM-01 a RDM-03 | Revisão do README antes de publicar |
-| EXT-01 | Testes próprios, se o extra entrar |
+| EXT-01 | `test_review_flow.py` (a pausa, a aprovação, a recusa, a segunda decisão e a ação inexistente), `test_review_actions.py` (as regras: pedido inexistente, não entregue ou já avaliado, nota fora de 1 a 5 e comentário longo), `test_actions_api.py` (as rotas, com `test_an_approved_review_reaches_postgres_once` (db)), `test_review_repository.py` (db) e avaliação: Q20 continua recusada |
 | EXT-02 | `test_mcp.py`, com um cliente MCP ligado ao servidor: `test_only_the_two_read_only_tools_are_listed`, `test_execute_sql_refuses_writes_and_logs_them`, `test_describe_schema_returns_the_description_the_api_uses` (db) e `test_the_server_runs_on_stdio_from_another_folder` (db); e `test_layers.py::test_the_mcp_server_has_no_shortcut_to_the_database` |

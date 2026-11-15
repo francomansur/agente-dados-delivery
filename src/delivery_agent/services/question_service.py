@@ -28,6 +28,10 @@ from delivery_agent.services.review_actions import ReviewProposal
 # The types that the checkpointer may rebuild from a saved state, and no others.
 STATE_TYPES = (QueryContext, QueryResult, TokenUsage, ReviewDraft, ReviewProposal)
 
+ACTION_NOT_FOUND = (
+    "Não encontrei a ação {action_id}. As ações pendentes ficam na memória da api e se perdem quando ela "
+    "reinicia."
+)
 DECIDED = {
     "written": "Esta ação já foi aprovada, e a avaliação foi gravada.",
     "rejected": "Esta ação já foi recusada, e nada foi gravado.",
@@ -214,10 +218,7 @@ class QuestionService:
             snapshot = self._graph.get_state(config)
 
             if not snapshot.values:
-                raise ActionNotFound(
-                    f"Não encontrei a ação {action_id}. As ações pendentes ficam na memória da api e se "
-                    "perdem quando ela reinicia."
-                )
+                raise ActionNotFound(ACTION_NOT_FOUND.format(action_id=action_id))
 
             if not snapshot.interrupts:
                 raise ActionAlreadyDecided(DECIDED[snapshot.values["action_status"]])

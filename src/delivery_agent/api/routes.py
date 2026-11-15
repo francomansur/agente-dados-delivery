@@ -1,4 +1,4 @@
-"""HTTP routes: ``POST /questions`` and ``GET /health``, documented at ``/docs``, and the web page at ``/``.
+"""HTTP routes: questions, the decision on pending actions and ``/health``, and the web page at ``/``.
 
 The routes only deal with HTTP: they read the request, call a service and turn errors into status
 codes. They receive the services through FastAPI's ``Depends``; ``delivery_agent.main`` builds them
@@ -15,9 +15,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from delivery_agent.core.errors import DatabaseUnavailable, MissingAPIKey
+from delivery_agent.core.errors import (
+    ActionAlreadyDecided,
+    ActionNotFound,
+    DatabaseUnavailable,
+    MissingAPIKey,
+)
 from delivery_agent.services.graph import Status
-from delivery_agent.services.question_service import AgentAnswer, PendingAction, QuestionService
+from delivery_agent.services.question_service import ActionResult, AgentAnswer, PendingAction, QuestionService
 
 # Fields of every answer, plus the pending action when there is one. The technical details (sql,
 # attempts, usage and duration_ms) only come with include_details=true.
@@ -28,6 +33,22 @@ SUMMARY_FIELDS = {"request_id", "status", "answer", "columns", "rows", "truncate
 _EXAMPLE: dict[str, Any] = AgentAnswer.model_json_schema()["examples"][0]
 DETAILED_EXAMPLE = {name: _EXAMPLE[name] for name in AgentAnswer.model_fields if name in _EXAMPLE}
 SUMMARY_EXAMPLE = {name: value for name, value in DETAILED_EXAMPLE.items() if name in SUMMARY_FIELDS}
+PENDING_EXAMPLE: dict[str, Any] = {
+    "request_id": "8d1e0a4f5b6c4d2e9f3a7b1c0d2e4f6a",
+    "status": "pending_approval",
+    "answer": (
+        'Pronto para registrar a avaliação do pedido 1234: nota 4, comentário "Chegou frio.". '
+        "Ela só será gravada depois da sua aprovação."
+    ),
+    "columns": [],
+    "rows": [],
+    "truncated": False,
+    "action": {
+        "action_id": "5c2a9e1d7b3f4a6c8e0d2b4f6a8c0e1d",
+        "type": "register_review",
+        "review": {"order_id": 1234, "rating": 4, "comment": "Chegou frio."},
+    },
+}
 
 # The web page to try the agent: index.html here, and its CSS and JavaScript under /static.
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -40,6 +61,10 @@ class AppServices(Protocol):
 
     def question_service(self) -> QuestionService:
         """Return the question service, built on the first question."""
+        ...
+
+    def decide_action(self, action_id: str, *, approve: bool) -> ActionResult:
+        """Approve or reject a pending action."""
         ...
 
     def database_is_up(self) -> bool:
@@ -109,6 +134,10 @@ def get_services(request: Request) -> AppServices:
                     "examples": {
                         "padrao": {"summary": "Padrão: só o essencial", "value": SUMMARY_EXAMPLE},
                         "com_detalhes": {"summary": "Com include_details=true", "value": DETAILED_EXAMPLE},
+                        "acao_pendente": {
+                            "summary": "Pedido de avaliação: espera aprovação",
+                            "value": PENDING_EXAMPLE,
+                        },
                     }
                 }
             },
@@ -140,6 +169,43 @@ def ask_question(
         return answer
 
     return AnswerSummary.model_validate(answer.model_dump(include=SUMMARY_FIELDS, exclude_unset=True))
+
+
+ACTION_ERRORS: dict[int | str, dict[str, Any]] = {
+    404: {"description": "Não existe ação com esse id, ou a api reiniciou e perdeu as pendentes."},
+    409: {"description": "A ação já foi aprovada ou recusada."},
+}
+
+
+@router.post(
+    "/actions/{action_id}/approve",
+    summary="Aprova uma ação pendente e grava a avaliação",
+    description=(
+        "Grava a avaliação que veio em action, com o papel review_writer. Uma ação só é decidida uma vez."
+    ),
+    responses=ACTION_ERRORS,
+)
+def approve_action(action_id: str, services: Annotated[AppServices, Depends(get_services)]) -> ActionResult:
+    return _decide(services, action_id, approve=True)
+
+
+@router.post(
+    "/actions/{action_id}/reject",
+    summary="Recusa uma ação pendente: nada é gravado",
+    description="Descarta a avaliação que veio em action. Uma ação só é decidida uma vez.",
+    responses=ACTION_ERRORS,
+)
+def reject_action(action_id: str, services: Annotated[AppServices, Depends(get_services)]) -> ActionResult:
+    return _decide(services, action_id, approve=False)
+
+
+def _decide(services: AppServices, action_id: str, *, approve: bool) -> ActionResult:
+    try:
+        return services.decide_action(action_id, approve=approve)
+    except ActionNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ActionAlreadyDecided as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.get("/", include_in_schema=False)
