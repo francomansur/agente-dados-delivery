@@ -40,7 +40,8 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "D", "S", "SIM", "RUF", "N"]
-ignore = ["D105", "D107"]
+# N818: the error names follow the spec (SQLRejected, QueryTimeout).
+ignore = ["D105", "D107", "N818"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
