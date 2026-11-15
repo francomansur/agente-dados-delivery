@@ -54,6 +54,8 @@ convention = "google"
 "src/delivery_agent/seed.py" = ["S311"]
 # The questions and reference SQL are data: splitting them mid-sentence would hurt more than help.
 "evals/cases.py" = ["E501"]
+# The routes have no docstring: FastAPI would publish it in /docs, whose text is in the decorators, in Portuguese.
+"src/delivery_agent/api/routes.py" = ["D103"]
 
 [tool.mypy]
 strict = true

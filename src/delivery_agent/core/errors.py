@@ -1,6 +1,7 @@
-"""Errors raised while validating or running model-written SQL.
+"""Errors of the agent.
 
-The messages are in Portuguese because they go back to the model, which uses them to fix the SQL.
+The messages are in Portuguese: the SQL errors go back to the model, which uses them to fix the SQL,
+and the others reach the people who call the API.
 """
 
 
@@ -22,3 +23,7 @@ class ExecutionError(SQLError):
 
 class DatabaseUnavailable(Exception):
     """The database cannot be reached. An infrastructure failure, not a problem with the query."""
+
+
+class MissingAPIKey(Exception):
+    """``ANTHROPIC_API_KEY`` is not set, so the agent has no model to call."""

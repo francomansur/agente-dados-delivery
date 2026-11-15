@@ -1,48 +1,34 @@
-"""HTTP API: ``POST /questions`` and ``GET /health``, documented at ``/docs``.
+"""HTTP routes: ``POST /questions`` and ``GET /health``, documented at ``/docs``.
 
-Run it with ``uvicorn delivery_agent.api.routes:create_app --factory``.
+The routes only deal with HTTP: they read the request, call a service and turn errors into status
+codes. They receive the services through FastAPI's ``Depends``; ``delivery_agent.main`` builds them
+when the api starts.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Annotated, Literal, Protocol
 
 import anthropic
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from delivery_agent import __version__
-from delivery_agent.core.audit import AuditLog
-from delivery_agent.core.errors import DatabaseUnavailable
-from delivery_agent.core.settings import Settings
-from delivery_agent.llm.client import AnthropicModel, LanguageModel
-from delivery_agent.repositories.delivery_repository import Database
-from delivery_agent.services.graph import SQLRunner
+from delivery_agent.core.errors import DatabaseUnavailable, MissingAPIKey
 from delivery_agent.services.question_service import AgentAnswer, QuestionService
 
-MISSING_KEY = (
-    "A chave da API da Anthropic não está configurada. Defina ANTHROPIC_API_KEY no .env e reinicie a api."
-)
-
-DESCRIPTION = """\
-Responde, em português, perguntas de negócio sobre a base fictícia de um marketplace de delivery.
-Para cada pergunta, o agente escreve um SQL, valida, executa com um usuário somente leitura e
-responde mostrando o SQL e as linhas usadas."""
+router = APIRouter()
 
 
-class Backend(SQLRunner, Protocol):
-    """Database access the API needs: the graph's runner plus a health check."""
+class AppServices(Protocol):
+    """What the routes use. ``delivery_agent.main.Services`` implements it; the tests use fakes."""
 
-    def ping(self) -> bool:
-        """Check that the database answers."""
+    def question_service(self) -> QuestionService:
+        """Return the question service, built on the first question."""
         ...
 
-    def close(self) -> None:
-        """Release the connections."""
+    def database_is_up(self) -> bool:
+        """Check that the database answers."""
         ...
 
 
@@ -64,103 +50,45 @@ class Health(BaseModel):
     detail: str | None = None
 
 
-@dataclass
-class Services:
-    """What the API runs on. The tests build it with fakes."""
+def get_services(request: Request) -> AppServices:
+    """Give the routes the services that ``delivery_agent.main`` built when the api started."""
+    services: AppServices = request.app.state.services
 
-    database: Backend
-    model: LanguageModel | None
-    questions: QuestionService | None = None
-
-    @classmethod
-    def from_settings(cls, settings: Settings) -> Services:
-        """Connect to the database and create the model client from the settings.
-
-        Args:
-            settings: Application settings.
-
-        Returns:
-            The services, with no model when ``ANTHROPIC_API_KEY`` is missing.
-        """
-        database = Database(settings, AuditLog(settings.audit_log_path))
-        database.open(wait=False)
-        api_key = settings.anthropic_api_key
-        model = (
-            AnthropicModel(api_key.get_secret_value(), settings.llm_model) if api_key is not None else None
-        )
-
-        return cls(database=database, model=model)
-
-    def get_question_service(self) -> QuestionService:
-        """Return the question service, building its graph on first use.
-
-        Returns:
-            The question service.
-
-        Raises:
-            HTTPException: 503 when the API key is missing.
-            DatabaseUnavailable: The schema could not be read to build the graph.
-        """
-        if self.model is None:
-            raise HTTPException(status_code=503, detail=MISSING_KEY)
-
-        if self.questions is None:
-            self.questions = QuestionService(self.database, self.model)
-
-        return self.questions
+    return services
 
 
-def create_app(services: Services | None = None) -> FastAPI:
-    """Build the FastAPI app.
+@router.post(
+    "/questions",
+    summary="Responde uma pergunta de negócio",
+    description="Escreve um SQL, valida, executa só leitura e responde com o SQL e as linhas.",
+    responses={
+        502: {"description": "A API do modelo falhou."},
+        503: {"description": "Falta a chave da API, ou o banco de dados está fora do ar."},
+    },
+)
+def ask_question(
+    request: QuestionRequest, services: Annotated[AppServices, Depends(get_services)]
+) -> AgentAnswer:
+    try:
+        return services.question_service().ask(request.question, source="api")
+    except MissingAPIKey as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except DatabaseUnavailable as error:
+        raise HTTPException(status_code=503, detail=f"O banco de dados está fora do ar: {error}") from error
+    except anthropic.APIError as error:
+        raise HTTPException(status_code=502, detail=f"A API do modelo falhou: {error}") from error
 
-    Args:
-        services: Database and model to use; when omitted, they come from the settings.
 
-    Returns:
-        The app, with ``/questions``, ``/health`` and ``/docs``.
-    """
-    resolved = services or Services.from_settings(Settings())
+@router.get(
+    "/health",
+    response_model=Health,
+    summary="Diz se a api e o banco estão no ar",
+    responses={503: {"model": Health, "description": "O banco de dados não respondeu."}},
+)
+def health(services: Annotated[AppServices, Depends(get_services)]) -> Health | JSONResponse:
+    if services.database_is_up():
+        return Health(status="ok")
 
-    @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        yield
-        resolved.database.close()
+    body = Health(status="unavailable", detail="O banco de dados não respondeu.")
 
-    app = FastAPI(
-        title="Agente de dados de delivery", description=DESCRIPTION, version=__version__, lifespan=lifespan
-    )
-
-    @app.post(
-        "/questions",
-        summary="Responde uma pergunta de negócio",
-        description="Escreve um SQL, valida, executa só leitura e responde com o SQL e as linhas.",
-        responses={
-            502: {"description": "A API do modelo falhou."},
-            503: {"description": "Falta a chave da API, ou o banco de dados está fora do ar."},
-        },
-    )
-    def ask_question(request: QuestionRequest) -> AgentAnswer:
-        try:
-            return resolved.get_question_service().ask(request.question, source="api")
-        except DatabaseUnavailable as error:
-            raise HTTPException(
-                status_code=503, detail=f"O banco de dados está fora do ar: {error}"
-            ) from error
-        except anthropic.APIError as error:
-            raise HTTPException(status_code=502, detail=f"A API do modelo falhou: {error}") from error
-
-    @app.get(
-        "/health",
-        response_model=Health,
-        summary="Diz se a api e o banco estão no ar",
-        responses={503: {"model": Health, "description": "O banco de dados não respondeu."}},
-    )
-    def health() -> Health | JSONResponse:
-        if resolved.database.ping():
-            return Health(status="ok")
-
-        body = Health(status="unavailable", detail="O banco de dados não respondeu.")
-
-        return JSONResponse(status_code=503, content=body.model_dump())
-
-    return app
+    return JSONResponse(status_code=503, content=body.model_dump())

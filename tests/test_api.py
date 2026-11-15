@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import anthropic
@@ -5,9 +7,9 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
-from delivery_agent.api.routes import Services, create_app
 from delivery_agent.core.audit import AuditLog
 from delivery_agent.core.settings import Settings
+from delivery_agent.main import Services, app, create_app
 from delivery_agent.repositories.delivery_repository import Database
 from fakes import COUNT_SQL, DONE, QUERY, FakeDatabase, FakeModel
 
@@ -25,14 +27,20 @@ FIELDS = {
 }
 
 
-def client_for(model: FakeModel | None, database: FakeDatabase | None = None) -> TestClient:
-    return TestClient(create_app(Services(database=database or FakeDatabase(), model=model)))
+@contextmanager
+def client_for(
+    model: FakeModel | None, database: FakeDatabase | Database | None = None
+) -> Iterator[TestClient]:
+    services = Services(database=database or FakeDatabase(), model=model)  # type: ignore[arg-type]
+
+    # The context manager runs the lifespan, which hands the services to the routes.
+    with TestClient(create_app(services)) as client:
+        yield client
 
 
 def test_question_returns_sql_and_rows() -> None:
-    client = client_for(FakeModel(QUERY, COUNT_SQL, DONE))
-
-    response = client.post("/questions", json={"question": "Quantos pedidos há?"})
+    with client_for(FakeModel(QUERY, COUNT_SQL, DONE)) as client:
+        response = client.post("/questions", json={"question": "Quantos pedidos há?"})
 
     body = response.json()
 
@@ -48,13 +56,15 @@ def test_question_returns_sql_and_rows() -> None:
 
 @pytest.mark.parametrize("question", ["", "oi", "x" * 501])
 def test_invalid_question_returns_422(question: str) -> None:
-    response = client_for(FakeModel()).post("/questions", json={"question": question})
+    with client_for(FakeModel()) as client:
+        response = client.post("/questions", json={"question": question})
 
     assert response.status_code == 422
 
 
 def test_missing_api_key_returns_503() -> None:
-    response = client_for(None).post("/questions", json={"question": "Quantos pedidos há?"})
+    with client_for(None) as client:
+        response = client.post("/questions", json={"question": "Quantos pedidos há?"})
 
     assert response.status_code == 503
     assert "ANTHROPIC_API_KEY" in response.json()["detail"]
@@ -65,30 +75,32 @@ def test_model_api_error_returns_502() -> None:
         request=httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
     )
 
-    response = client_for(FakeModel(error)).post("/questions", json={"question": "Quantos pedidos há?"})
+    with client_for(FakeModel(error)) as client:
+        response = client.post("/questions", json={"question": "Quantos pedidos há?"})
 
     assert response.status_code == 502
     assert response.json()["detail"].startswith("A API do modelo falhou")
 
 
 def test_database_down_returns_503() -> None:
-    client = client_for(FakeModel(QUERY, COUNT_SQL, DONE), FakeDatabase(healthy=False))
-
-    response = client.post("/questions", json={"question": "Quantos pedidos há?"})
+    with client_for(FakeModel(QUERY, COUNT_SQL, DONE), FakeDatabase(healthy=False)) as client:
+        response = client.post("/questions", json={"question": "Quantos pedidos há?"})
 
     assert response.status_code == 503
     assert response.json()["detail"].startswith("O banco de dados está fora do ar")
 
 
 def test_health_reports_a_database_that_is_down() -> None:
-    response = client_for(None, FakeDatabase(healthy=False)).get("/health")
+    with client_for(None, FakeDatabase(healthy=False)) as client:
+        response = client.get("/health")
 
     assert response.status_code == 503
     assert response.json() == {"status": "unavailable", "detail": "O banco de dados não respondeu."}
 
 
 def test_docs_have_examples() -> None:
-    schema = client_for(None).get("/openapi.json").json()
+    with client_for(None) as client:
+        schema = client.get("/openapi.json").json()
 
     assert schema["info"]["title"] == "Agente de dados de delivery"
     assert schema["components"]["schemas"]["QuestionRequest"]["properties"]["question"]["examples"]
@@ -96,11 +108,10 @@ def test_docs_have_examples() -> None:
 
 
 @pytest.mark.db
-def test_health(settings: Settings, tmp_path: Path) -> None:
-    database = Database(settings, AuditLog(tmp_path / "audit.jsonl"))
-    database.open()
-
-    with TestClient(create_app(Services(database=database, model=None))) as client:
+def test_health(database: Database) -> None:
+    # The app that uvicorn runs: its lifespan builds the services from the settings. The fixture only
+    # skips the test when Postgres is down.
+    with TestClient(app) as client:
         response = client.get("/health")
 
     assert response.status_code == 200
@@ -112,7 +123,7 @@ def test_health_with_an_unreachable_database(settings: Settings, tmp_path: Path)
     database = Database(unreachable, AuditLog(tmp_path / "audit.jsonl"))
     database.open(wait=False)
 
-    with TestClient(create_app(Services(database=database, model=None))) as client:
+    with client_for(None, database) as client:
         response = client.get("/health")
 
     assert response.status_code == 503
