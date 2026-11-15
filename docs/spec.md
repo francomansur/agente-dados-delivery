@@ -108,7 +108,7 @@ O validador usa o sqlglot, com o dialeto do Postgres, para analisar o SQL; o ana
 | ID | Requisito |
 |----|-----------|
 | EXE-01 | `execute_sql(sql)` recebe a entrada validada por Pydantic, passa pelo validador, executa com o `agent_reader` numa transação somente leitura e devolve colunas, linhas, `truncated` e a duração. `NUMERIC` vira número, e datas viram texto ISO. |
-| EXE-02 | Cada tipo de erro vira uma exceção própria (`SQLRejected`, `QueryTimeout` ou `ExecutionError`, todas filhas de `SQLError`), com a mensagem do Postgres. |
+| EXE-02 | Cada tipo de erro vira uma exceção própria (`SQLRejected`, `QueryTimeout` ou `ExecutionError`, todas filhas de `SQLError`), com a mensagem do Postgres. Banco fora do ar vira `DatabaseUnavailable`, que não é erro do SQL e por isso não volta ao modelo para correção. |
 | SCH-01 | `describe_schema()` roda com o `agent_reader` e mostra só o que ele pode ler: tabelas e views, colunas, tipos, descrições e exemplos de valores. Colunas de texto com até 15 valores distintos mostram todos; as outras colunas de texto mostram 3 exemplos; datas mostram o mínimo e o máximo. Não mostra contagens de linhas, que poderiam entregar respostas da avaliação. |
 | SCH-02 | Toda tabela, view e coluna tem descrição em português, via `COMMENT ON`. |
 | SCH-03 | A saída de `describe_schema()` é determinística: a mesma base gera o mesmo texto. |
