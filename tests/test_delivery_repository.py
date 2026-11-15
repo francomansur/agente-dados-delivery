@@ -1,10 +1,11 @@
 """The repository on its own, against Postgres: no validator and no audit log in front of it."""
 
+import psycopg
 import pytest
 
 from delivery_agent.core.errors import ExecutionError, QueryTimeout
 from delivery_agent.core.settings import Settings
-from delivery_agent.repositories.delivery_repository import DeliveryRepository
+from delivery_agent.repositories.delivery_repository import DeliveryRepository, OrderReviewState
 
 pytestmark = pytest.mark.db
 
@@ -100,3 +101,16 @@ def test_reads_sample_values_and_date_ranges(repository: DeliveryRepository) -> 
     assert payment_methods == ["cash", "credit_card", "debit_card", "meal_voucher", "pix"]
     assert str(first).startswith("2026-01-01")
     assert str(last).startswith("2026-10-31")
+
+
+def test_reads_the_state_of_an_order_for_the_review_action(
+    repository: DeliveryRepository, admin_conn: psycopg.Connection, unreviewed_order: int
+) -> None:
+    reviewed, canceled = admin_conn.execute(
+        "SELECT (SELECT min(order_id) FROM reviews), (SELECT min(id) FROM orders WHERE status = 'canceled')"
+    ).fetchone() or (0, 0)
+
+    assert repository.order_review_state(unreviewed_order) == OrderReviewState("delivered", reviewed=False)
+    assert repository.order_review_state(reviewed) == OrderReviewState("delivered", reviewed=True)
+    assert repository.order_review_state(canceled) == OrderReviewState("canceled", reviewed=False)
+    assert repository.order_review_state(999_999_999) is None

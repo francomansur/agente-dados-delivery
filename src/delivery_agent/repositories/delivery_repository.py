@@ -1,8 +1,9 @@
-"""Read-only access to the delivery database: the only module that runs SQL on Postgres.
+"""Read-only access to the delivery database: every read runs here.
 
 The connections use ``agent_reader``, the read-only role (security layers 1 and 2), and each
 transaction is read-only and has its own time limit. The repository runs the SQL it receives as it
-is: checking the model's SQL and logging it are jobs of ``services.sql_tools``.
+is: checking the model's SQL and logging it are jobs of ``services.sql_tools``. The only write, of the
+reviews that a person approves, is in ``review_repository``, with another role.
 """
 
 from __future__ import annotations
@@ -30,6 +31,12 @@ _RELATIONS_QUERY = """
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v') AND has_table_privilege(c.oid, 'SELECT')
     ORDER BY c.relname
+"""
+
+_ORDER_REVIEW_QUERY = """
+    SELECT o.status, EXISTS (SELECT 1 FROM reviews r WHERE r.order_id = o.id)
+    FROM orders o
+    WHERE o.id = %s
 """
 
 _COLUMNS_QUERY = """
@@ -62,6 +69,14 @@ class Column:
     data_type: str
     comment: str
     category: str  # Postgres type category: S for text, D for dates and times, N for numbers
+
+
+@dataclass(frozen=True)
+class OrderReviewState:
+    """What the review action needs to know about one order: its status and whether it has a review."""
+
+    status: str
+    reviewed: bool
 
 
 @dataclass(frozen=True)
@@ -174,6 +189,26 @@ class DeliveryRepository:
         return QueryResult(
             sql=query, columns=columns, rows=rows, truncated=truncated, duration_ms=duration_ms
         )
+
+    def order_review_state(self, order_id: int) -> OrderReviewState | None:
+        """Read the status of an order and whether it has a review, for the rules of the review action.
+
+        Args:
+            order_id: Id of the order.
+
+        Returns:
+            The status and whether the order has a review, or ``None`` when there is no such order.
+
+        Raises:
+            DatabaseUnavailable: The database cannot be reached.
+        """
+        try:
+            with self._pool.connection() as conn, conn.transaction(force_rollback=True):
+                row = conn.execute(_ORDER_REVIEW_QUERY, (order_id,)).fetchone()
+        except (psycopg.OperationalError, PoolTimeout) as error:
+            raise DatabaseUnavailable(f"O banco de dados não respondeu: {error}") from error
+
+        return None if row is None else OrderReviewState(status=row[0], reviewed=row[1])
 
     def list_relations(self) -> list[Relation]:
         """List the tables and views that the read-only role can read, with their columns.
