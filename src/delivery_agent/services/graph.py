@@ -319,10 +319,11 @@ def _action_context(state: AgentState) -> ActionContext:
 
 
 def _pending_message(proposal: ReviewProposal) -> str:
-    comment = f'comentário "{proposal.comment}"' if proposal.comment else "sem comentário"
+    # The comment itself goes in the action, which the page shows next to this text.
+    comment = "um comentário" if proposal.comment else "sem comentário"
 
     return (
-        f"Pronto para registrar a avaliação do pedido {proposal.order_id}: nota {proposal.rating}, "
+        f"Pronto para registrar a avaliação do pedido {proposal.order_id}, com nota {proposal.rating} e "
         f"{comment}. Ela só será gravada depois da sua aprovação."
     )
 

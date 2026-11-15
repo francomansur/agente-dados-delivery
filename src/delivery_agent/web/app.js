@@ -1,5 +1,7 @@
 // Page to try the agent. Each question becomes a card with the answer, the data and, on request,
 // the technical details. There is no conversation memory: every question goes alone to the API.
+// A request to register a review comes back pending: its card shows what will be written and asks
+// the person to approve or reject it.
 "use strict";
 
 const ENDPOINT = "/questions?include_details=true";
@@ -10,7 +12,14 @@ const STATUS_LABELS = {
   answered: "respondida",
   refused: "recusada",
   failed: "falhou",
+  pending_approval: "aguardando aprovação",
 };
+
+// What happened to a pending action, and how its result looks.
+const DECISION_LABELS = { written: "gravada", rejected: "descartada", failed: "não gravada" };
+const DECISION_STYLES = { written: "is-written", rejected: "is-neutral", failed: "is-error" };
+const DECISION_ERROR_LABELS = { 404: "não encontrada", 409: "já decidida" };
+const DECISION_NETWORK_MESSAGE = "Não consegui falar com a API para registrar a decisão. Tente de novo.";
 
 const ERROR_MESSAGES = {
   422: "A pergunta precisa ter entre 3 e 500 caracteres.",
@@ -136,8 +145,72 @@ function showAnswer(card, data) {
     fillTable(card, data.columns, data.rows, data.truncated);
   }
 
+  if (data.action) {
+    showAction(card, data.action);
+  }
+
   fillDetails(card, data);
   statusRegion.textContent = `Pergunta ${label}.`;
+}
+
+function showAction(card, action) {
+  const box = card.querySelector(".action");
+  const { order_id: orderId, rating, comment } = action.review;
+  box.querySelector(".action__order").textContent = String(orderId);
+  box.querySelector(".action__rating").textContent = `${rating} de 5`;
+  box.querySelector(".action__comment").textContent = comment ?? "sem comentário";
+  box.querySelector(".action__approve").addEventListener("click", () => decide(card, action.action_id, true));
+  box.querySelector(".action__reject").addEventListener("click", () => decide(card, action.action_id, false));
+  box.hidden = false;
+}
+
+async function decide(card, actionId, approve) {
+  const box = card.querySelector(".action");
+  setDecisionBusy(box, true, approve);
+
+  try {
+    const path = `/actions/${encodeURIComponent(actionId)}/${approve ? "approve" : "reject"}`;
+    const response = await fetch(path, { method: "POST" });
+
+    if (response.ok) {
+      const data = await response.json();
+      setBadge(card, data.status, DECISION_LABELS[data.status] ?? data.status);
+      showDecision(box, data.answer, DECISION_STYLES[data.status] ?? "is-neutral", data.status === "written");
+
+      return;
+    }
+
+    // 404 and 409 explain themselves: the api lost the action, or it was decided before.
+    const detail = await readDetail(response);
+    setBadge(card, "error", DECISION_ERROR_LABELS[response.status] ?? "erro");
+    showDecision(box, detail || `Algo deu errado (erro ${response.status}). Tente de novo.`, "is-error", false);
+  } catch {
+    setDecisionBusy(box, false, approve);
+    showResult(box, DECISION_NETWORK_MESSAGE, "is-error");
+  }
+}
+
+function setDecisionBusy(box, busy, approve) {
+  const approveButton = box.querySelector(".action__approve");
+  const rejectButton = box.querySelector(".action__reject");
+  approveButton.disabled = busy;
+  rejectButton.disabled = busy;
+  approveButton.textContent = busy && approve ? "Gravando…" : "Aprovar";
+  rejectButton.textContent = busy && !approve ? "Descartando…" : "Recusar";
+}
+
+function showDecision(box, message, style, written) {
+  box.querySelector(".action__buttons").hidden = true;
+  box.querySelector(".action__title").textContent = written ? "O que foi gravado" : "O que seria gravado";
+  showResult(box, message, style);
+}
+
+function showResult(box, message, style) {
+  const result = box.querySelector(".action__result");
+  result.className = `action__result ${style}`;
+  result.textContent = message;
+  result.hidden = false;
+  statusRegion.textContent = message;
 }
 
 function showError(card, message) {

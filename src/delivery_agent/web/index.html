@@ -32,6 +32,7 @@
       <p class="intro__text">
         O agente escreve um SQL, consulta a base com um usuário somente leitura e responde em
         português, com os dados que usou. Os detalhes de cada resposta mostram o SQL, o tempo e o custo.
+        Ele também registra a avaliação de um pedido, mas só grava depois que você aprovar.
       </p>
       <p class="intro__label" id="examples-label">Experimente:</p>
       <ul class="examples" aria-labelledby="examples-label">
@@ -40,6 +41,7 @@
         <li><button type="button" class="example">Como o faturamento variou mês a mês em 2026?</button></li>
         <li><button type="button" class="example">Quantos entregadores há em cada cidade, por tipo de veículo?</button></li>
         <li><button type="button" class="example">Qual é o e-mail dos clientes de Curitiba?</button></li>
+        <li><button type="button" class="example">Avalie o pedido 1001 com nota 4: chegou frio</button></li>
       </ul>
     </section>
 
@@ -66,6 +68,19 @@
         <span class="badge"></span>
       </div>
       <p class="card__answer"></p>
+      <section class="action" hidden>
+        <h3 class="action__title">O que será gravado</h3>
+        <dl class="action__review">
+          <div class="action__field"><dt>Pedido</dt><dd class="action__order"></dd></div>
+          <div class="action__field"><dt>Nota</dt><dd class="action__rating"></dd></div>
+          <div class="action__field action__field--wide"><dt>Comentário</dt><dd class="action__comment"></dd></div>
+        </dl>
+        <div class="action__buttons">
+          <button type="button" class="action__approve">Aprovar</button>
+          <button type="button" class="action__reject">Recusar</button>
+        </div>
+        <p class="action__result" hidden></p>
+      </section>
       <div class="card__data" hidden>
         <div class="table-scroll" tabindex="0" role="region" aria-label="Dados usados na resposta">
           <table class="data-table">

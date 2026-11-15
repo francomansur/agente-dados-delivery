@@ -52,7 +52,7 @@ def test_a_review_request_waits_for_approval_without_writing() -> None:
     assert answer.action is not None
     assert answer.action.review == PROPOSAL
     assert answer.answer == (
-        'Pronto para registrar a avaliação do pedido 1234: nota 4, comentário "Chegou frio.". '
+        "Pronto para registrar a avaliação do pedido 1234, com nota 4 e um comentário. "
         "Ela só será gravada depois da sua aprovação."
     )
     assert (answer.sql, answer.rows) == (None, [])

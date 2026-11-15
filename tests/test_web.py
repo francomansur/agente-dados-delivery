@@ -53,3 +53,12 @@ def test_the_examples_are_not_evaluation_questions() -> None:
 
 def test_the_page_stays_out_of_the_api_docs() -> None:
     assert "/" not in client.get("/openapi.json").json()["paths"]
+
+
+def test_a_pending_card_has_the_approval_buttons() -> None:
+    page = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+    script = (WEB_DIR / "app.js").read_text(encoding="utf-8")
+
+    assert '<button type="button" class="action__approve">Aprovar</button>' in page
+    assert '<button type="button" class="action__reject">Recusar</button>' in page
+    assert '`/actions/${encodeURIComponent(actionId)}/${approve ? "approve" : "reject"}`' in script

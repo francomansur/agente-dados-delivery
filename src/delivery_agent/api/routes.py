@@ -37,7 +37,7 @@ PENDING_EXAMPLE: dict[str, Any] = {
     "request_id": "8d1e0a4f5b6c4d2e9f3a7b1c0d2e4f6a",
     "status": "pending_approval",
     "answer": (
-        'Pronto para registrar a avaliação do pedido 1234: nota 4, comentário "Chegou frio.". '
+        "Pronto para registrar a avaliação do pedido 1001, com nota 4 e um comentário. "
         "Ela só será gravada depois da sua aprovação."
     ),
     "columns": [],
@@ -46,7 +46,7 @@ PENDING_EXAMPLE: dict[str, Any] = {
     "action": {
         "action_id": "5c2a9e1d7b3f4a6c8e0d2b4f6a8c0e1d",
         "type": "register_review",
-        "review": {"order_id": 1234, "rating": 4, "comment": "Chegou frio."},
+        "review": {"order_id": 1001, "rating": 4, "comment": "Chegou frio."},
     },
 }
 
