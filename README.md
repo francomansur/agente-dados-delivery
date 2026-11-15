@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/francomansur/agente-dados-delivery/actions/workflows/ci.yml/badge.svg)](https://github.com/francomansur/agente-dados-delivery/actions/workflows/ci.yml)
 
-Agente de IA que responde, em português, perguntas de negócio sobre a base fictícia de um marketplace de delivery. Para cada pergunta, ele escreve um SQL, valida, executa no Postgres com um usuário somente leitura e responde mostrando o SQL e as linhas que usou.
+Agente de IA que responde, em português, perguntas de negócio sobre a base fictícia de um marketplace de delivery. Para cada pergunta, ele escreve um SQL, valida, executa no Postgres com um usuário somente leitura e responde com as linhas que usou. O SQL, o tempo e o custo vêm quando pedidos.
 
 **Stack:** Python 3.12, LangGraph (fluxo), FastAPI (API), Claude Haiku 5.5 pelo SDK oficial `anthropic`, PostgreSQL em Docker Compose, sqlglot, pytest, ruff e mypy.
 
@@ -50,7 +50,19 @@ curl -s -X POST http://127.0.0.1:8000/questions \
   -d '{"question": "Qual é o ticket médio por forma de pagamento nos pedidos entregues?"}'
 ```
 
-Resposta real da API, sem o `request_id` e com o `usage` resumido:
+Por padrão, a resposta traz só o essencial. Esta é uma resposta real, sem o `request_id`:
+
+```json
+{
+  "status": "answered",
+  "answer": "Ticket médio por forma de pagamento nos pedidos entregues:\n1. Cartão de débito: R$ 75,40\n2. Cartão de crédito: R$ 75,40\n3. Pix: R$ 74,59\n4. Dinheiro: R$ 74,58\n5. Vale-refeição: R$ 72,60",
+  "columns": ["payment_method", "average_ticket"],
+  "rows": [["debit_card", 75.4], ["credit_card", 75.4], ["pix", 74.59], ["cash", 74.58], ["meal_voucher", 72.6]],
+  "truncated": false
+}
+```
+
+Para receber também o SQL, as tentativas, o tempo e o custo, chame `POST /questions?include_details=true`. A mesma resposta, com os detalhes e o `usage` resumido:
 
 ```json
 {
@@ -66,9 +78,9 @@ Resposta real da API, sem o `request_id` e com o `usage` resumido:
 }
 ```
 
-O `LIMIT 101` no fim foi acrescentado pelo validador, e a resposta traduz os códigos: `debit_card` vira "Cartão de débito".
+O `LIMIT 101` no fim do SQL foi acrescentado pelo validador, e a resposta traduz os códigos: `debit_card` vira "Cartão de débito".
 
-A API foi pensada para uso interno, por analistas. Mostrar o SQL e o custo de cada pergunta (`usage`) faz parte da transparência. Num produto para o cliente final, o SQL e o `usage` ficariam só nos logs e nas métricas.
+**Detalhes só quando pedidos.** A API foi pensada para uso interno, por analistas. Por padrão, a resposta traz só o essencial: o texto, as colunas e as linhas. Com `include_details=true`, ela traz também o SQL, as tentativas, o tempo e o custo (`usage`), para quem quer conferir a consulta ou acompanhar o gasto. A auditoria registra o SQL de toda pergunta, com ou sem o parâmetro.
 
 ## Como funciona
 
@@ -169,7 +181,7 @@ Com base na lista [OWASP Top 10 para aplicações com LLM](https://owasp.org/www
 | LLM06: Excessive Agency | O agente só sabe ler, com o mínimo de permissão, e tem no máximo 2 correções de SQL por pergunta. |
 | LLM07: System Prompt Leakage | O system prompt não tem segredo nenhum: só instruções e a descrição da base, que o agente já vê. Credenciais nunca vão para o prompt. |
 | LLM08: Vector and Embedding Weaknesses | Não se aplica: o projeto não usa RAG nem embeddings. |
-| LLM09: Misinformation | Toda resposta mostra o SQL e as linhas; os números saem das linhas, e o nó de resposta não faz contas. Quando faltam dados, o agente recusa em vez de inventar (Q17 e Q18). A avaliação mede a taxa de acerto. |
+| LLM09: Misinformation | Toda resposta traz as linhas de onde saem os números, e o SQL vem quando pedido (`include_details=true`); o nó de resposta não faz contas. Quando faltam dados, o agente recusa em vez de inventar (Q17 e Q18). A avaliação mede a taxa de acerto. |
 | LLM10: Unbounded Consumption | Pergunta de 3 a 500 caracteres, no máximo 5 chamadas ao modelo por pergunta, `max_tokens` por chamada, consultas de até 5 segundos e 100 linhas, API só em `127.0.0.1` e avaliação com teto de gasto. Limite: a API não tem autenticação nem limite de requisições, porque é para uso local. |
 
 ## Testes e qualidade
