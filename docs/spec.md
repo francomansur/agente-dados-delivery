@@ -32,11 +32,19 @@ flowchart LR
 | QLT-02 | `ruff check` e `ruff format --check` limpos, com regras de estilo, imports, bugs comuns e docstrings no estilo Google. |
 | QLT-03 | Pydantic na entrada de `execute_sql` (e das ferramentas do MCP, se o extra entrar), nas saídas estruturadas do modelo e nas configurações, via pydantic-settings. |
 | QLT-04 | pytest com cobertura mínima de 85% em `src/`. |
+| QLT-05 | O código fica em camadas por responsabilidade, e as dependências vão num sentido só: `api` → `services` → (`repositories`, `llm`) → `core`. As rotas só tratam o HTTP, o repository só fala com o banco (não importa o validador nem a auditoria) e o `main.py` é o único módulo que monta as peças de todas as camadas. |
 
 ### 1.2 Estrutura
 
 ```
-src/delivery_agent/   configurações, validador, executor, auditoria, fluxo, API e gerador dos dados
+src/delivery_agent/
+  main.py             cria a API: monta as peças de cada camada e registra as rotas
+  api/                rotas HTTP
+  services/           casos de uso e regras: a pergunta, o fluxo do LangGraph, as ferramentas de SQL e o validador
+  repositories/       acesso ao banco, só SQL
+  llm/                cliente do modelo, prompts e preços
+  core/               configurações, erros e auditoria
+  seed.py             gerador dos dados fictícios
 db/                   imagem do Postgres: Dockerfile, schema com COMMENT ON, papéis e carga
 evals/                perguntas, script da avaliação, comparação e histórico (runs/)
 tests/                testes; os marcados com (db) rodam contra o Postgres do Compose
@@ -258,6 +266,7 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 | QLT-01, QLT-02 | Jobs de mypy e ruff no CI |
 | QLT-03 | `test_sql_tools.py::test_input_is_validated` e `test_settings.py` |
 | QLT-04 | `--cov-fail-under=85` no CI |
+| QLT-05 | `test_layers.py`, que lê os imports de cada camada |
 | DB-01 | `test_schema.py::test_schema_matches_spec` (db) |
 | DB-02 | `test_seed.py::test_same_seed_same_data`, `test_counts_match_spec` e `test_personal_data_is_fictional` |
 | DB-03 | `test_schema.py::test_integrity` (db) |

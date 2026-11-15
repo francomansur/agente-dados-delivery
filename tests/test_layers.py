@@ -1,0 +1,61 @@
+"""The layers depend in one direction only: api -> services -> (repositories, llm) -> core."""
+
+import ast
+from pathlib import Path
+
+import pytest
+
+PACKAGE = Path(__file__).parent.parent / "src" / "delivery_agent"
+
+# The layers each one may import, besides itself. main.py assembles every layer, so it is not listed.
+ALLOWED = {
+    "api": {"services", "core"},
+    "services": {"repositories", "llm", "core"},
+    "repositories": {"core"},
+    "llm": {"core"},
+    "core": set(),
+}
+
+
+def project_imports(path: Path) -> set[str]:
+    """Modules of the project that one file imports, such as ``delivery_agent.core.errors``."""
+    found: set[str] = set()
+
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("delivery_agent"):
+            found.add(node.module or "")
+        elif isinstance(node, ast.Import):
+            found.update(alias.name for alias in node.names if alias.name.startswith("delivery_agent"))
+
+    return found
+
+
+def layer_of(module: str) -> str:
+    """Layer of a module: ``delivery_agent.core.errors`` is in ``core``."""
+    return module.split(".")[1] if "." in module else ""
+
+
+@pytest.mark.parametrize("layer", sorted(ALLOWED))
+def test_each_layer_imports_only_the_layers_below(layer: str) -> None:
+    files = sorted((PACKAGE / layer).glob("*.py"))
+    wrong = [
+        f"{path.name} imports {module}"
+        for path in files
+        for module in sorted(project_imports(path))
+        if layer_of(module) not in {layer, *ALLOWED[layer]}
+    ]
+
+    assert files
+    assert wrong == []
+
+
+def test_the_repository_imports_neither_the_validator_nor_the_audit_log() -> None:
+    imports = project_imports(PACKAGE / "repositories" / "delivery_repository.py")
+
+    assert "delivery_agent.services.sql_validator" not in imports
+    assert "delivery_agent.core.audit" not in imports
+
+
+def test_the_data_generator_stands_alone() -> None:
+    # The Postgres image runs seed.py by itself, without the rest of the package.
+    assert project_imports(PACKAGE / "seed.py") == set()
