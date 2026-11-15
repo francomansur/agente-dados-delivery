@@ -286,7 +286,7 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 | GRA-04 | `test_api.py::test_question_returns_sql_and_rows` e a checagem "resposta certa" da avaliação |
 | GRA-05 | Avaliação: Q04 |
 | GRA-06 | `test_settings.py` |
-| GRA-07 | `test_llm.py::test_question_is_not_in_system_prompt` |
+| GRA-07 | `test_llm.py::test_question_is_not_in_the_system_prompt` |
 | GRA-08 | `test_graph.py::test_model_refusal` e `test_max_tokens` |
 | API-01 a API-04 | `test_api.py` |
 | EVA-01, EVA-03, EVA-05 | A rodada registrada em `evals/runs/` e no README |

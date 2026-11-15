@@ -20,6 +20,8 @@ Rodada de 15/11/2026, com o Claude Haiku 5.5: 20 perguntas, 3 repetições cada,
 | Custo médio por pergunta | US$ 0,0003 |
 | Custo da rodada inteira | US$ 0,016 |
 
+Depois da refatoração em camadas, uma segunda rodada deu o mesmo resultado, 100% nas 60 execuções, com 3,6 s por pergunta ([resultado completo](evals/runs/2026-11-15_1550_claude-haiku-5-5/)). A diferença de tempo veio das chamadas ao modelo: as consultas ao banco levaram o mesmo tempo.
+
 Nenhuma pergunta precisou de correção do SQL. A nota máxima também mostra um limite desta avaliação: com 20 perguntas, ela não separa um agente bom de um excelente. O próximo passo é acrescentar perguntas mais difíceis, como as que exigem várias etapas ou admitem mais de uma interpretação.
 
 ## Como rodar
@@ -66,6 +68,8 @@ Resposta real da API, sem o `request_id` e com o `usage` resumido:
 
 O `LIMIT 101` no fim foi acrescentado pelo validador, e a resposta traduz os códigos: `debit_card` vira "Cartão de débito".
 
+A API foi pensada para uso interno, por analistas. Mostrar o SQL e o custo de cada pergunta (`usage`) faz parte da transparência. Num produto para o cliente final, o SQL e o `usage` ficariam só nos logs e nas métricas.
+
 ## Como funciona
 
 O fluxo é um grafo do LangGraph. O diagrama abaixo foi gerado pelo próprio LangGraph a partir do grafo compilado (`build_graph(...).get_graph().draw_mermaid()`):
@@ -106,6 +110,24 @@ graph TD;
 
 Cada nó que chama o modelo usa um system prompt fixo (instruções, descrição da base e glossário), com cache de prompt; a pergunta vai só na mensagem do usuário. As saídas do modelo são estruturadas e validadas com Pydantic. A API e a avaliação chamam a mesma função, `QuestionService.ask`.
 
+## Estrutura do código
+
+O código em [`src/delivery_agent/`](src/delivery_agent/) fica em camadas, como o Controller, o Service e o Repository de um projeto MVC:
+
+| Camada | Arquivos | Papel | No MVC |
+|--------|----------|-------|--------|
+| Montagem | `main.py` | Cria o app, monta as peças das outras camadas quando a api sobe e registra as rotas. É o único arquivo que conhece todas as camadas. | O container de injeção de dependência |
+| Rotas | `api/routes.py` | Recebe o pedido HTTP, chama o service e traduz os erros em status (503 e 502). | Controller |
+| Serviços | `services/question_service.py`, `graph.py`, `sql_tools.py` e `sql_validator.py` | As regras: responder a pergunta, o fluxo do LangGraph, e passar o SQL do modelo pela validação da entrada, pelo validador, pelo banco e pela auditoria. | Service |
+| Repositório | `repositories/delivery_repository.py` | Só fala com o banco: conexões somente leitura, execução de um SELECT e as consultas que descrevem as tabelas. | Repository |
+| Modelo | `llm/client.py`, `prompts.py` e `pricing.py` | A chamada ao Claude, os prompts e os preços. | Um cliente de API externa, usado pelo service |
+| Base | `core/settings.py`, `errors.py` e `audit.py` | Configurações, erros e auditoria, usados pelas outras camadas. | Configuração e utilitários |
+
+- **As dependências vão num sentido só:** rotas, depois serviços, depois repositório e modelo, depois a base. O teste [`tests/test_layers.py`](tests/test_layers.py) lê os imports e falha se uma camada usar outra acima dela.
+- **Não há View:** a API devolve JSON, e o formato da resposta é o modelo Pydantic `AgentAnswer`.
+- **O gerador dos dados** (`seed.py`) fica fora das camadas: a imagem do Postgres o roda sozinho, sem o resto do pacote.
+- **Há um repository só,** porque o SQL das perguntas é escrito pelo modelo: não existem consultas fixas por tabela, como em `OrderRepository`. O porquê está em [`docs/decisoes.md`](docs/decisoes.md).
+
 ## De onde vêm os dados
 
 Os dados são fictícios, mas realistas. O gerador ([`src/delivery_agent/seed.py`](src/delivery_agent/seed.py)) segue uma "receita": quantos restaurantes cada cidade tem, quanto cada cozinha vende no almoço, à tarde e no jantar, os preços dos cardápios, as taxas de entrega, quanto tempo as entregas levam, com que frequência os pedidos são cancelados, e assim por diante. Seguindo essa receita, ele sorteia 146 restaurantes em 7 cidades, 4.200 clientes, 460 entregadores, 1.325 itens de cardápio, 28.172 pedidos de janeiro a outubro de 2026 e 10.800 avaliações.
@@ -129,8 +151,8 @@ Toda tabela e coluna tem uma descrição em português (`COMMENT ON`), que o age
 
 1. **Usuário do banco somente leitura.** O papel `agent_reader` só tem `SELECT` nas tabelas sem dados pessoais. Toda transação dele começa somente leitura e tem limite de 5 segundos, e a função `set_config` fica revogada, para uma consulta não conseguir desligar essas proteções. Mesmo que o modelo seja enganado, o banco recusa qualquer escrita.
 2. **View sem dados pessoais.** Nome, e-mail, telefone e endereço ficam em `customers`, que o agente não pode ler; ele usa a view `customers_public`. Um teste prova que `SELECT phone FROM customers` falha por permissão.
-3. **Validador de SQL.** O SQL do modelo é analisado com o sqlglot antes de chegar ao banco: precisa ser uma única consulta de leitura, sem escrita em nenhum ponto (nem dentro de um `WITH`), sem funções administrativas, e ganha um `LIMIT` quando não tem. O executor ainda roda o SQL de um jeito em que o próprio Postgres recusa dois comandos numa chamada.
-4. **Auditoria.** Todo SQL que chega ao executor, aprovado ou recusado, vira uma linha em `logs/audit.jsonl`, com a pergunta, o SQL, o tempo, o número de linhas e o erro.
+3. **Validador de SQL.** O SQL do modelo é analisado com o sqlglot antes de chegar ao banco: precisa ser uma única consulta de leitura, sem escrita em nenhum ponto (nem dentro de um `WITH`), sem funções administrativas, e ganha um `LIMIT` quando não tem. O repository ainda roda o SQL de um jeito em que o próprio Postgres recusa dois comandos numa chamada.
+4. **Auditoria.** Todo SQL do modelo, aprovado ou recusado, vira uma linha em `logs/audit.jsonl`, com a pergunta, o SQL, o tempo, o número de linhas e o erro.
 5. **Riscos mapeados.** A seção abaixo percorre a lista da OWASP.
 
 ## Riscos e como mitiguei

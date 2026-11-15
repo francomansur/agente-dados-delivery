@@ -32,3 +32,21 @@ Registro curto das decisões do projeto: o contexto, o que foi decidido e as alt
 - **Contexto:** o plano pedia um GIF no README. Gravar um GIF de terminal exigiria instalar ferramentas fora do projeto, como vhs ou asciinema, e o prazo da candidatura estava curto.
 - **Decisão:** o README mostra um exemplo real de chamada e resposta, copiado de uma chamada à API rodando em Docker, com a pergunta, o SQL gerado e as linhas.
 - **Alternativa:** gravar o GIF depois, com o vhs, se o Franco quiser.
+
+## 15/11/2026: estrutura em camadas por responsabilidade
+
+- **Contexto:** a classe `Database` misturava a validação da entrada, o validador, a execução, a descrição do schema e a auditoria, e o `api.py` juntava as rotas com a montagem dos objetos (conexões, cliente do modelo e serviços). O Franco pediu a divisão que usa no trabalho: o service tem as validações e as regras de negócio, e o repository tem só SQL.
+- **Decisão:** cinco camadas, com as dependências num sentido só: `api` → `services` → (`repositories`, `llm`) → `core`.
+  - `api/routes.py` só trata o HTTP: lê o pedido, chama o service e traduz os erros em status.
+  - `services/` tem os casos de uso e as regras. O `question_service.py` responde a pergunta, o `graph.py` é o fluxo do LangGraph, o `sql_tools.py` passa o SQL do modelo pelo Pydantic, pelo validador, pelo repository e pela auditoria, e o `sql_validator.py` tem as regras de segurança do SQL.
+  - `repositories/delivery_repository.py` só fala com o banco: conexões, `ping`, execução somente leitura de um SELECT e as consultas ao catálogo que descrevem as tabelas. Ele não importa o validador nem a auditoria.
+  - `llm/` tem o cliente do Claude, os prompts e os preços. Os prompts recebem o schema e o resultado como texto e valores, sem importar o banco.
+  - `core/` tem as configurações, os erros e a auditoria.
+  - `main.py` cria o app e, no lifespan, monta as peças de cada camada; as rotas as recebem pelo `Depends` do FastAPI. É o único módulo que conhece todas as camadas, como um container de injeção de dependência, e segue o formato da documentação do FastAPI.
+  - O `tests/test_layers.py` confere os imports de cada camada.
+- **Por que um repository só:** o SQL das perguntas é escrito pelo modelo, então não há consultas fixas por tabela, como um `OrderRepository` com um método por consulta. O repository oferece a execução somente leitura e as consultas ao catálogo, e isso serve a qualquer pergunta. Se a ação de escrita com aprovação (EXT-01) entrar, ela terá consultas fixas, e aí surge um `ReviewRepository`.
+- **Prova de que o comportamento não mudou:** a descrição do schema, os system prompts e o OpenAPI saíram idênticos, byte a byte, aos de antes da refatoração. A avaliação rodou de novo, no commit `a8c681d`, e o `make compare` não marcou nenhuma pergunta: 100% de acerto antes e depois, nas 60 execuções. O tempo médio passou de 3,2 s para 3,6 s, mas as consultas ao banco levaram o mesmo tempo (cerca de 25 ms cada, pela auditoria); a diferença está nas chamadas ao modelo.
+- **Alternativas:**
+  - manter o pacote sem camadas, mais curto, mas com responsabilidades misturadas;
+  - um repository por tabela, que não serve quando quem escreve o SQL é o modelo;
+  - deixar a montagem dos objetos em `api/routes.py`, que misturaria as rotas com as conexões e faria as rotas importarem todas as camadas.
