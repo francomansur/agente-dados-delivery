@@ -70,7 +70,7 @@ docs/                 esta spec e decisoes.md
 | `menu_items` | id, restaurant_id, name, item_type, price | 1.325. Preço atual |
 | `orders` | id, customer_id, restaurant_id, courier_id, created_at, status, cancellation_reason, payment_method, subtotal, delivery_fee, discount, total, distance_km, promised_minutes, delivered_at, delivery_minutes | 28.172 pedidos, de janeiro a outubro de 2026 |
 | `order_items` | id, order_id, menu_item_id, quantity, unit_price | 54.956. Preço cobrado na data do pedido |
-| `reviews` | id, order_id, rating, comment, created_at | 10.800 avaliações, com nota de 1 a 5 |
+| `reviews` | id, order_id, rating, comment, created_at | 10.800 avaliações, com nota de 1 a 5 e no máximo uma por pedido. As avaliações novas (EXT-01) recebem o `id` do banco |
 
 Códigos:
 - `status`: `delivered`, `canceled`
@@ -91,7 +91,7 @@ Códigos:
 |----|-----------|
 | DCK-01 | `docker compose up` sobe `postgres` e `api`. A api só sobe depois que o healthcheck do banco passa, e ela também tem o próprio healthcheck. |
 | DCK-02 | A imagem do Postgres é construída em dois estágios: o Python gera os dados, e o Postgres carrega schema, dados e papéis na primeira inicialização. Nenhum dado gerado vai para o git. |
-| DCK-03 | As credenciais ficam só no `.env`, que não vai para o git, e o `.env.example` documenta cada variável. A api recebe apenas a senha do `agent_reader`, nunca a do administrador. |
+| DCK-03 | As credenciais ficam só no `.env`, que não vai para o git, e o `.env.example` documenta cada variável. A api recebe apenas as senhas do `agent_reader` e do `review_writer`, nunca a do administrador. |
 | DCK-04 | As portas do banco e da api são publicadas só em `127.0.0.1`. |
 
 ### 2.3 Papéis e permissões (camadas 1 e 2)
@@ -103,6 +103,7 @@ Códigos:
 | SEC-03 | Uma consulta não consegue desligar essas proteções: o executor abre cada transação como `READ ONLY` e com o próprio `statement_timeout`, e `set_config` fica revogada para `PUBLIC`. |
 | SEC-04 | Com o usuário do agente, `SELECT phone FROM customers` falha por permissão, e `INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE` e `CREATE` falham no próprio banco, mesmo sem passar pelo validador. |
 | SEC-05 | A view `customers_public` expõe só `id`, `neighborhood`, `city`, `signup_date` e `is_subscriber`. |
+| SEC-06 | O papel `review_writer` (LOGIN), usado só na ação de escrita (EXT-01), tem apenas `INSERT` em `reviews`, nas colunas `order_id`, `rating`, `comment` e `created_at`: o `id` vem do banco. Ele não tem `SELECT`, `UPDATE` nem `DELETE` em nenhuma tabela, e tem `statement_timeout = 5s`. |
 
 ### 2.4 Validador de SQL (camada 3)
 
@@ -291,6 +292,7 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 | SEC-01, SEC-04, SEC-05 | `test_db_security.py::test_agent_cannot_read_customer_pii`, `test_agent_cannot_write` e `test_public_view_has_no_pii` (db) |
 | SEC-02 | `test_db_security.py::test_role_settings` e `test_slow_query_is_canceled` (db) |
 | SEC-03 | `test_db_security.py::test_set_config_is_revoked` e `test_transaction_is_read_only` (db) |
+| SEC-06 | `test_db_security.py::test_review_writer_can_only_insert_reviews`, `test_review_writer_inserts_a_review` e `test_review_writer_settings` (db) |
 | VAL-01 a VAL-06 | `test_sql_validator.py`, com casos para cada regra, inclusive tentativas de burlar com strings, comentários e aspas |
 | EXE-01, EXE-02 | `test_delivery_repository.py` (db), sem o validador na frente, e `test_sql_tools.py`, com o caminho completo |
 | SCH-01 a SCH-04 | `test_schema.py::test_shows_only_allowed_objects`, `test_every_table_and_column_has_comment`, `test_is_deterministic` e `test_includes_examples_and_glossary` (db) |

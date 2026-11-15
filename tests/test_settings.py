@@ -6,7 +6,9 @@ from delivery_agent.core.settings import Settings
 
 @pytest.fixture(autouse=True)
 def _clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("DATABASE_PORT", "POSTGRES_PORT", "LLM_MODEL", "AGENT_DB_PASSWORD", "ANTHROPIC_API_KEY"):
+    names = ("DATABASE_PORT", "POSTGRES_PORT", "LLM_MODEL", "AGENT_DB_PASSWORD", "REVIEW_DB_PASSWORD")
+
+    for name in (*names, "ANTHROPIC_API_KEY"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -18,6 +20,8 @@ def test_defaults() -> None:
     assert settings.agent_db_user == "agent_reader"
     assert settings.statement_timeout_ms == 5000
     assert settings.anthropic_api_key is None
+    assert settings.review_db_user == "review_writer"
+    assert settings.review_db_password is None
 
 
 def test_database_port_prefers_the_docker_variable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -51,3 +55,20 @@ def test_password_is_required() -> None:
 
 def test_empty_api_key_means_missing() -> None:
     assert Settings(_env_file=None, agent_db_password="x", anthropic_api_key="").anthropic_api_key is None
+
+
+def test_review_writer_connects_with_its_own_password() -> None:
+    settings = Settings(_env_file=None, agent_db_password="x", review_db_password="escrita")
+
+    assert "escrita" not in repr(settings)
+    assert "user=review_writer" in settings.review_conninfo()
+    assert "password=escrita" in settings.review_conninfo()
+
+
+def test_without_its_password_the_review_writer_has_no_connection() -> None:
+    settings = Settings(_env_file=None, agent_db_password="x", review_db_password="")
+
+    assert settings.review_db_password is None
+
+    with pytest.raises(ValueError, match="REVIEW_DB_PASSWORD"):
+        settings.review_conninfo()

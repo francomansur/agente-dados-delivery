@@ -9,6 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
       AGENT_DB_PASSWORD: ${AGENT_DB_PASSWORD:?defina AGENT_DB_PASSWORD no .env}
+      REVIEW_DB_PASSWORD: ${REVIEW_DB_PASSWORD:?defina REVIEW_DB_PASSWORD no .env}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
     healthcheck:
@@ -24,8 +25,10 @@ services:
     environment:
       DATABASE_HOST: postgres
       DATABASE_PORT: "5432"
-      # The api gets only the read-only role's password, never the administrator's.
+      # The api gets only the passwords of the read-only role and of review_writer, which can only
+      # insert reviews, never the administrator's.
       AGENT_DB_PASSWORD: ${AGENT_DB_PASSWORD:?defina AGENT_DB_PASSWORD no .env}
+      REVIEW_DB_PASSWORD: ${REVIEW_DB_PASSWORD:?defina REVIEW_DB_PASSWORD no .env}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-claude-haiku-5-5}
       AUDIT_LOG_PATH: /app/logs/audit.jsonl

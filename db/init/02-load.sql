@@ -9,4 +9,7 @@ COPY orders FROM '/seed/orders.csv' WITH (FORMAT csv, HEADER true);
 COPY order_items FROM '/seed/order_items.csv' WITH (FORMAT csv, HEADER true);
 COPY reviews FROM '/seed/reviews.csv' WITH (FORMAT csv, HEADER true);
 
+-- The CSV brings the ids of the reviews, so the next review the database creates starts after them.
+SELECT setval(pg_get_serial_sequence('reviews', 'id'), (SELECT max(id) FROM reviews));
+
 ANALYZE;

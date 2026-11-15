@@ -81,3 +81,45 @@ def test_transaction_is_read_only(repository: DeliveryRepository) -> None:
     )
 
     assert result.rows == [["on", "5s"]]
+
+
+# review_writer, the role of the review action (extra EXT-01), can only insert reviews.
+WRITER_FORBIDDEN = [
+    "SELECT order_id FROM reviews",
+    "SELECT id FROM orders",
+    "SELECT phone FROM customers",
+    "UPDATE reviews SET rating = 1 WHERE id = 1",
+    "DELETE FROM reviews WHERE id = 1",
+    "TRUNCATE reviews",
+    "INSERT INTO reviews (id, order_id, rating, created_at) VALUES (999999, 1, 5, now())",
+    "UPDATE orders SET total = 0 WHERE id = 1",
+    "DELETE FROM orders WHERE id = 1",
+    "INSERT INTO orders (id) VALUES (999999)",
+    "DROP TABLE reviews",
+    "CREATE TABLE stolen (id int)",
+]
+
+
+@pytest.mark.parametrize("statement", WRITER_FORBIDDEN)
+def test_review_writer_can_only_insert_reviews(writer_conn: psycopg.Connection, statement: str) -> None:
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        writer_conn.execute(statement)
+
+
+def test_review_writer_inserts_a_review(
+    writer_conn: psycopg.Connection, admin_conn: psycopg.Connection, unreviewed_order: int
+) -> None:
+    # The database generates the id: the role cannot even choose it.
+    writer_conn.execute(
+        "INSERT INTO reviews (order_id, rating, comment, created_at) VALUES (%s, 4, 'Chegou frio.', now())",
+        (unreviewed_order,),
+    )
+    review = admin_conn.execute(
+        "SELECT id > 10800, rating, comment FROM reviews WHERE order_id = %s", (unreviewed_order,)
+    ).fetchone()
+
+    assert review == (True, 4, "Chegou frio.")
+
+
+def test_review_writer_settings(writer_conn: psycopg.Connection) -> None:
+    assert writer_conn.execute("SHOW statement_timeout").fetchone() == ("5s",)

@@ -13,6 +13,7 @@ jobs:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: ci-admin-password
       AGENT_DB_PASSWORD: ci-agent-password
+      REVIEW_DB_PASSWORD: ci-review-password
       POSTGRES_PORT: "5433"
       # Without the database, the tests marked with db fail instead of being skipped.
       REQUIRE_DB: "1"

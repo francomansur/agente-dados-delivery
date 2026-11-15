@@ -42,6 +42,20 @@ def _require_database(settings: Settings) -> None:
     pytest.skip(message)
 
 
+def _require_review_writer(settings: Settings) -> None:
+    _require_database(settings)
+
+    if settings.review_db_password is not None:
+        return
+
+    message = "Falta REVIEW_DB_PASSWORD no .env, a senha do review_writer."
+
+    if os.environ.get("REQUIRE_DB"):
+        pytest.fail(message)
+
+    pytest.skip(message)
+
+
 @pytest.fixture(scope="session")
 def settings() -> Settings:
     return Settings()
@@ -87,3 +101,27 @@ def admin_conn(settings: Settings) -> Iterator[psycopg.Connection]:
 
     with psycopg.connect(conninfo) as conn:
         yield conn
+
+
+@pytest.fixture
+def writer_conn(settings: Settings) -> Iterator[psycopg.Connection]:
+    _require_review_writer(settings)
+
+    with psycopg.connect(settings.review_conninfo(), autocommit=True) as conn:
+        yield conn
+
+
+@pytest.fixture
+def unreviewed_order(admin_conn: psycopg.Connection) -> Iterator[int]:
+    """A delivered order without a review. A review that a test writes for it is deleted at the end."""
+    row = admin_conn.execute(
+        "SELECT o.id FROM orders o WHERE o.status = 'delivered' "
+        "AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.order_id = o.id) ORDER BY o.id LIMIT 1"
+    ).fetchone()
+    assert row is not None
+    admin_conn.commit()
+
+    yield row[0]
+
+    admin_conn.execute("DELETE FROM reviews WHERE order_id = %s", (row[0],))
+    admin_conn.commit()
