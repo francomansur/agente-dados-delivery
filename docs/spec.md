@@ -7,18 +7,18 @@
 
 **O que é:** uma API que responde, em português, perguntas de negócio sobre a base fictícia de um marketplace de delivery. Para cada pergunta, o agente gera um SQL, valida, executa no Postgres com um usuário somente leitura e responde com as linhas usadas. O SQL e os outros detalhes técnicos vêm quando pedidos (API-05).
 
-**Stack:** Python 3.12, LangGraph (fluxo), FastAPI (API), SDK oficial `anthropic` com o Claude Haiku 5.5, PostgreSQL em Docker Compose, psycopg 3, sqlglot, pytest, ruff e mypy.
+**Stack:** Python 3.12, LangGraph (fluxo), FastAPI (API), SDK oficial `anthropic` com o Claude Haiku 5.5, PostgreSQL em Docker Compose, psycopg 3, sqlglot, pytest, ruff e mypy. A interface web usa HTML, CSS e JavaScript puros.
 
 **Fora do escopo:**
 - escrita no banco, exceto o extra EXT-01;
-- interface gráfica e demo online (no lugar, um GIF no README);
+- demo online: a interface web (WEB-01 a WEB-04) serve para testar o agente na máquina local;
 - code mode;
 - autenticação na API, que roda só na máquina local;
 - conversa com memória: cada pergunta é independente.
 
 ```mermaid
 flowchart LR
-    C["cliente HTTP"] -->|"127.0.0.1:8000"| API["api: FastAPI + LangGraph"]
+    C["navegador ou cliente HTTP"] -->|"127.0.0.1:8000"| API["api: FastAPI + LangGraph"]
     API -->|"HTTPS"| LLM["Claude Haiku 5.5"]
     API -->|"agent_reader, somente leitura"| PG[("postgres: dados fictícios")]
     API --> LOG["logs/audit.jsonl"]
@@ -44,6 +44,7 @@ src/delivery_agent/
   repositories/       acesso ao banco, só SQL
   llm/                cliente do modelo, prompts e preços
   core/               configurações, erros e auditoria
+  web/                página para testar o agente: HTML, CSS e JavaScript
   seed.py             gerador dos dados fictícios
 db/                   imagem do Postgres: Dockerfile, schema com COMMENT ON, papéis e carga
 evals/                perguntas, script da avaliação, comparação e histórico (runs/)
@@ -202,6 +203,15 @@ flowchart TD
 | API-04 | Sem a chave da Anthropic, `POST /questions` responde 503 com uma explicação, e com o banco fora do ar também. Um erro na API do modelo, depois das novas tentativas do SDK, vira 502. Uma pergunta inválida vira 422. |
 | API-05 | O parâmetro `include_details` (na query, booleano, padrão `false`) pede os detalhes técnicos: com `POST /questions?include_details=true`, a resposta traz também `sql`, `attempts`, `usage` (tokens e custo em US$) e `duration_ms`. Sem ele, esses campos não aparecem, nem como `null`. A auditoria registra o SQL de toda pergunta, com ou sem o parâmetro, e o `/docs` mostra o parâmetro e um exemplo de cada formato de resposta. O serviço não muda: a resposta enxuta é um recorte que a rota faz. |
 
+### 3.3 Interface web
+
+| ID | Requisito |
+|----|-----------|
+| WEB-01 | `GET /` serve uma página única para testar o agente, com os arquivos em `src/delivery_agent/web/` (`index.html`, `styles.css` e `app.js`): HTML, CSS e JavaScript puros, sem framework, sem build e sem nada de fora do servidor. Ela chama `POST /questions?include_details=true` com um `fetch` comum. |
+| WEB-02 | Cada pergunta vira um cartão numa linha do tempo: a pergunta, um selo de status (respondida, recusada ou falhou), a resposta em destaque e a tabela com os dados, com números e datas no formato brasileiro. O botão "Ver detalhes" mostra o SQL em fonte monoespaçada, com botão de copiar, as tentativas, o tempo e o custo em US$. Os erros 422, 502 e 503, e a API fora do ar, viram mensagens amigáveis no cartão. |
+| WEB-03 | O campo de pergunta fica embaixo, como num chat: Enter envia, e o campo fica desabilitado, com "Consultando os dados…", enquanto espera. Uma dica avisa que cada pergunta é respondida sozinha, sem memória das anteriores. A página traz de 4 a 6 perguntas de exemplo clicáveis, diferentes das da avaliação. |
+| WEB-04 | O visual segue o estilo dos apps de delivery (vermelho, branco e cartões com cantos arredondados), sem nome nem logo de empresa. A página funciona no celular e é acessível: campos com rótulo, uso pelo teclado e contraste de pelo menos 4,5:1 nos textos. |
+
 ## 4. Etapa 3: avaliação
 
 São 20 perguntas: 16 respondíveis (6 fáceis, 6 médias e 4 difíceis) e 4 recusas. Uma recusa conta como acerto quando o agente recusa, em vez de inventar uma resposta.
@@ -291,6 +301,8 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 | GRA-08 | `test_graph.py::test_model_refusal` e `test_max_tokens` |
 | API-01 a API-04 | `test_api.py` |
 | API-05 | `test_api.py::test_the_answer_has_only_the_essential_by_default`, `test_details_come_only_when_asked`, `test_a_refusal_has_no_sql_by_default_and_a_null_one_with_details`, `test_the_audit_log_keeps_the_sql_that_the_default_answer_leaves_out` e `test_docs_show_the_parameter_and_both_answers` |
+| WEB-01 | `test_web.py::test_the_page_is_served_at_the_root`, `test_the_static_files_load`, `test_the_page_asks_the_api_for_the_details` e `test_the_page_loads_nothing_from_other_sites` |
+| WEB-02 a WEB-04 | `test_web.py::test_the_examples_are_not_evaluation_questions` e revisão da tela no navegador, no computador e no celular, com o print do README |
 | EVA-01, EVA-03, EVA-05 | A rodada registrada em `evals/runs/` e no README |
 | EVA-02, EVA-09 | `test_eval_grading.py` |
 | EVA-04, EVA-08 | `test_eval_runner.py::test_infra_error_is_not_scored` e `test_asks_before_spending` |

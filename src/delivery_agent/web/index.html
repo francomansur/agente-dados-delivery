@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Everything comes from this server: no CDN, no inline script and no inline style. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'">
+  <title>Pergunte aos dados · Delivery</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header__inner">
+      <svg class="app-header__icon" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <rect x="2" y="2" width="28" height="28" rx="9" class="app-header__icon-bg"/>
+        <rect x="9" y="16" width="3.5" height="8" rx="1.5" class="app-header__icon-bar"/>
+        <rect x="14.25" y="11" width="3.5" height="13" rx="1.5" class="app-header__icon-bar"/>
+        <rect x="19.5" y="7" width="3.5" height="17" rx="1.5" class="app-header__icon-accent"/>
+      </svg>
+      <div>
+        <h1 class="app-header__title">Pergunte aos dados · Delivery</h1>
+        <p class="app-header__subtitle">Um agente de IA responde, com SQL, sobre uma base fictícia de delivery</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="intro" aria-labelledby="intro-title">
+      <h2 class="intro__title" id="intro-title">Faça uma pergunta de negócio</h2>
+      <p class="intro__text">
+        O agente escreve um SQL, consulta a base com um usuário somente leitura e responde em
+        português, com os dados que usou. Os detalhes de cada resposta mostram o SQL, o tempo e o custo.
+      </p>
+      <p class="intro__label" id="examples-label">Experimente:</p>
+      <ul class="examples" aria-labelledby="examples-label">
+        <li><button type="button" class="example">Qual é a taxa de cancelamento por forma de pagamento?</button></li>
+        <li><button type="button" class="example">Quais são os 5 restaurantes com mais pedidos entregues?</button></li>
+        <li><button type="button" class="example">Como o faturamento variou mês a mês em 2026?</button></li>
+        <li><button type="button" class="example">Quantos entregadores há em cada cidade, por tipo de veículo?</button></li>
+        <li><button type="button" class="example">Qual é o e-mail dos clientes de Curitiba?</button></li>
+      </ul>
+    </section>
+
+    <ol class="timeline" id="timeline" aria-label="Perguntas e respostas"></ol>
+  </main>
+
+  <footer class="composer">
+    <form class="composer__form" id="question-form">
+      <label class="visually-hidden" for="question-input">Sua pergunta</label>
+      <input class="composer__input" id="question-input" name="question" type="text" autocomplete="off"
+             required minlength="3" maxlength="500" aria-describedby="question-hint"
+             placeholder="Pergunte sobre pedidos, restaurantes, entregas…">
+      <button class="composer__send" type="submit">Perguntar</button>
+    </form>
+    <p class="composer__hint" id="question-hint">Cada pergunta é respondida sozinha, sem memória das anteriores.</p>
+  </footer>
+
+  <p class="visually-hidden" id="status" role="status" aria-live="polite"></p>
+
+  <template id="card-template">
+    <li class="card">
+      <div class="card__header">
+        <p class="card__question"></p>
+        <span class="badge"></span>
+      </div>
+      <p class="card__answer"></p>
+      <div class="card__data" hidden>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Dados usados na resposta">
+          <table class="data-table">
+            <thead><tr></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="card__note" hidden></p>
+      </div>
+      <button type="button" class="card__toggle" aria-expanded="false" hidden>Ver detalhes</button>
+      <div class="card__details" hidden>
+        <div class="sql">
+          <div class="sql__header">
+            <span class="sql__label">SQL executado</span>
+            <button type="button" class="sql__copy">Copiar SQL</button>
+          </div>
+          <pre class="sql__code"><code></code></pre>
+        </div>
+        <dl class="stats">
+          <div class="stats__item"><dt>Tentativas</dt><dd class="stats__attempts"></dd></div>
+          <div class="stats__item"><dt>Tempo</dt><dd class="stats__time"></dd></div>
+          <div class="stats__item"><dt>Custo</dt><dd class="stats__cost"></dd></div>
+        </dl>
+      </div>
+    </li>
+  </template>
+</body>
+</html>

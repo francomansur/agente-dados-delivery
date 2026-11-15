@@ -15,9 +15,10 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from delivery_agent import __version__
-from delivery_agent.api.routes import router
+from delivery_agent.api.routes import WEB_DIR, router
 from delivery_agent.core.audit import AuditLog
 from delivery_agent.core.errors import MissingAPIKey
 from delivery_agent.core.settings import Settings
@@ -114,6 +115,7 @@ def create_app(services: Services | None = None) -> FastAPI:
         title="Agente de dados de delivery", description=DESCRIPTION, version=__version__, lifespan=lifespan
     )
     app.include_router(router)
+    app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
     return app
 

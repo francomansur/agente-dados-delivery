@@ -1,4 +1,4 @@
-"""HTTP routes: ``POST /questions`` and ``GET /health``, documented at ``/docs``.
+"""HTTP routes: ``POST /questions`` and ``GET /health``, documented at ``/docs``, and the web page at ``/``.
 
 The routes only deal with HTTP: they read the request, call a service and turn errors into status
 codes. They receive the services through FastAPI's ``Depends``; ``delivery_agent.main`` builds them
@@ -7,11 +7,12 @@ when the api starts.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated, Any, Literal, Protocol
 
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from delivery_agent.core.errors import DatabaseUnavailable, MissingAPIKey
@@ -27,6 +28,9 @@ SUMMARY_FIELDS = {"request_id", "status", "answer", "columns", "rows", "truncate
 _EXAMPLE: dict[str, Any] = AgentAnswer.model_json_schema()["examples"][0]
 DETAILED_EXAMPLE = {name: _EXAMPLE[name] for name in AgentAnswer.model_fields}
 SUMMARY_EXAMPLE = {name: _EXAMPLE[name] for name in AgentAnswer.model_fields if name in SUMMARY_FIELDS}
+
+# The web page to try the agent: index.html here, and its CSS and JavaScript under /static.
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 router = APIRouter()
 
@@ -128,6 +132,11 @@ def ask_question(
         return answer
 
     return AnswerSummary.model_validate(answer.model_dump(include=SUMMARY_FIELDS))
+
+
+@router.get("/", include_in_schema=False)
+def web_page() -> FileResponse:
+    return FileResponse(WEB_DIR / "index.html")
 
 
 @router.get(

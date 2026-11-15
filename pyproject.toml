@@ -33,6 +33,10 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# The web page is not Python, so it has to be listed to go into the package (and the api image).
+[tool.setuptools.package-data]
+delivery_agent = ["web/*"]
+
 [tool.ruff]
 line-length = 110
 target-version = "py312"
