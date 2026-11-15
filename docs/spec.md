@@ -238,7 +238,7 @@ As perguntas que pedem um nome também pedem o número (por exemplo, "e de quant
 
 | ID | Requisito |
 |----|-----------|
-| RDM-01 | O README, em português, traz: o que o projeto faz, como rodar (`cp .env.example .env` e `docker compose up`), um exemplo de chamada, o diagrama do fluxo gerado pelo LangGraph, as camadas de segurança, o resultado da avaliação (data, modelo, taxa de acerto, tempo e custo por pergunta), o badge do CI, o GIF, a seção "Convenções" e as limitações. |
+| RDM-01 | O README, em português, traz: o que o projeto faz, como rodar (`cp .env.example .env` e `docker compose up`), um exemplo real de chamada e resposta (ou um GIF), o diagrama do fluxo gerado pelo LangGraph, as seções "De onde vêm os dados", "Convenções" e "Como este projeto foi construído", as camadas de segurança, o resultado da avaliação (data, modelo, taxa de acerto, tempo e custo por pergunta), o badge do CI e as limitações. |
 | RDM-02 | A seção "Riscos e como mitiguei" percorre a lista OWASP Top 10 para aplicações com LLM e diz, para cada item, como o projeto mitiga o risco ou por que ele não se aplica. |
 | RDM-03 | O repositório não usa nome nem logo de nenhuma empresa de delivery: a base é de um marketplace fictício. |
 

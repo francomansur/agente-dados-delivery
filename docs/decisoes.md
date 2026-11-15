@@ -26,3 +26,9 @@ Registro curto das decisões do projeto: o contexto, o que foi decidido e as alt
 - **Decisão:** usar o sqlglot, com o dialeto do Postgres, para verificar que há uma única instrução, que ela é uma consulta de leitura, que não há escrita em nenhum ponto da árvore (inclusive dentro de um `WITH`), que não há funções proibidas e se já existe `LIMIT`. O SQL executado continua sendo o texto original, só com o `LIMIT` acrescentado: o sqlglot analisa, mas não reescreve.
 - **Por quê:** num teste com 39 tentativas de burla, o sqlglot recusou 37. Das duas que passaram, uma é inofensiva (`TABLE orders`, atalho de leitura do Postgres), e a outra, um identificador com escape Unicode (`U&"..."`) que ele não decodifica, passa a ser recusada antes da análise. Ele também aceitou as 26 consultas válidas do teste.
 - **Alternativas:** manter o analisador feito à mão, com mais código próprio e mais risco nos casos de borda; ou usar o pglast, que usa o parser do próprio Postgres e é mais exato, mas depende de uma extensão em C. Como a barreira principal é o banco (usuário somente leitura e permissões), o sqlglot basta.
+
+## 15/11/2026: exemplo real de chamada no lugar do GIF
+
+- **Contexto:** o plano pedia um GIF no README. Gravar um GIF de terminal exigiria instalar ferramentas fora do projeto, como vhs ou asciinema, e o prazo da candidatura estava curto.
+- **Decisão:** o README mostra um exemplo real de chamada e resposta, copiado de uma chamada à API rodando em Docker, com a pergunta, o SQL gerado e as linhas.
+- **Alternativa:** gravar o GIF depois, com o vhs, se o Franco quiser.
