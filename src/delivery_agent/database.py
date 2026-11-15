@@ -98,14 +98,18 @@ class Database:
         )
         self._schema_description: str | None = None
 
-    def open(self) -> None:
+    def open(self, *, wait: bool = True) -> None:
         """Open the connection pool.
+
+        Args:
+            wait: Wait for the first connection. The API passes ``False`` so it can start, and
+                report the problem on ``/health``, while the database is down.
 
         Raises:
             DatabaseUnavailable: The database did not answer in time.
         """
         try:
-            self._pool.open(wait=True, timeout=10)
+            self._pool.open(wait=wait, timeout=10)
         except PoolTimeout as error:
             raise DatabaseUnavailable(f"O banco de dados não respondeu: {error}") from error
 
@@ -135,6 +139,28 @@ class Database:
 
         return True
 
+    def validate(self, sql_text: str, context: QueryContext) -> str:
+        """Run the input checks and the validator, logging any rejection.
+
+        Args:
+            sql_text: SQL written by the model.
+            context: Request that asked for the query, for the audit log.
+
+        Returns:
+            The SQL to run, with ``LIMIT 101`` when the outer query has no limit.
+
+        Raises:
+            SQLRejected: The input or the validator blocked the query.
+        """
+        started = time.monotonic()
+
+        try:
+            return validate_sql(_parse_input(sql_text).sql)
+        except SQLRejected as error:
+            self._log(context, sql_text, "rejected", started, row_count=None, error=str(error))
+
+            raise
+
     def execute_sql(self, sql_text: str, context: QueryContext) -> QueryResult:
         """Validate and run one model-written query as the read-only role.
 
@@ -151,13 +177,13 @@ class Database:
             ExecutionError: Postgres refused or failed to run the query.
             DatabaseUnavailable: The database cannot be reached.
         """
+        validated_sql = self.validate(sql_text, context)
         started = time.monotonic()
 
         try:
-            request = _parse_input(sql_text)
-            result = self._run(validate_sql(request.sql))
+            result = self._run(validated_sql)
         except (SQLError, DatabaseUnavailable) as error:
-            self._log(context, sql_text, _audit_status(error), started, row_count=None, error=str(error))
+            self._log(context, validated_sql, _audit_status(error), started, row_count=None, error=str(error))
 
             raise
 
