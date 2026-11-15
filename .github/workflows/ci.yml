@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    env:
+      # Senhas do banco descartável do CI. O CI não usa a chave da Anthropic.
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: ci-admin-password
+      AGENT_DB_PASSWORD: ci-agent-password
+      POSTGRES_PORT: "5433"
+      # Sem o banco, os testes marcados com db falham em vez de serem pulados.
+      REQUIRE_DB: "1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Instalar dependências
+        run: pip install -e ".[dev]"
+
+      - name: Ruff
+        run: make lint BIN=
+
+      - name: Mypy
+        run: make typecheck BIN=
+
+      - name: Subir o Postgres
+        run: docker compose up -d --build --wait postgres
+
+      - name: Pytest com cobertura
+        run: make test BIN=
