@@ -18,3 +18,7 @@ class QueryTimeout(SQLError):
 
 class ExecutionError(SQLError):
     """Postgres refused or failed to run the query."""
+
+
+class DatabaseUnavailable(Exception):
+    """The database cannot be reached. An infrastructure failure, not a problem with the query."""

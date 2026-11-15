@@ -1,0 +1,49 @@
+import pytest
+from pydantic import ValidationError
+
+from delivery_agent.settings import Settings
+
+
+@pytest.fixture(autouse=True)
+def _clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("DATABASE_PORT", "POSTGRES_PORT", "LLM_MODEL", "AGENT_DB_PASSWORD", "ANTHROPIC_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_defaults() -> None:
+    settings = Settings(_env_file=None, agent_db_password="x")
+
+    assert settings.llm_model == "claude-haiku-5-5"
+    assert settings.database_port == 5433
+    assert settings.agent_db_user == "agent_reader"
+    assert settings.statement_timeout_ms == 5000
+    assert settings.anthropic_api_key is None
+
+
+def test_database_port_prefers_the_docker_variable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("POSTGRES_PORT", "6000")
+    monkeypatch.setenv("DATABASE_PORT", "5432")
+
+    assert Settings(_env_file=None, agent_db_password="x").database_port == 5432
+
+    monkeypatch.delenv("DATABASE_PORT")
+
+    assert Settings(_env_file=None, agent_db_password="x").database_port == 6000
+
+
+def test_model_comes_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_MODEL", "claude-sonnet-5-5")
+
+    assert Settings(_env_file=None, agent_db_password="x").llm_model == "claude-sonnet-5-5"
+
+
+def test_password_is_kept_secret() -> None:
+    settings = Settings(_env_file=None, agent_db_password="segredo")
+
+    assert "segredo" not in repr(settings)
+    assert "password=segredo" in settings.agent_conninfo()
+
+
+def test_password_is_required() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
