@@ -1,8 +1,8 @@
 """Entry point of the API: create the FastAPI app, assemble its dependencies and include the routes.
 
-When the api starts, the lifespan opens the database access with ``assembly.open_sql_tools`` and
-creates the Claude client from the settings; when it stops, it closes the database connections. The
-routes receive these objects through ``Depends``.
+When the api starts, the lifespan opens the database access with ``assembly.open_sql_tools``, as the
+MCP server does, and creates the Claude client from the settings; when it stops, it closes the
+database connections. The routes receive these objects through ``Depends``.
 
 Run it with ``uvicorn delivery_agent.main:app``.
 """

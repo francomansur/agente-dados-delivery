@@ -1,8 +1,8 @@
 """Assembly of the read-only path from the settings to the database.
 
 A pool of connections of the read-only role, and the SQL tools over it, which validate every query
-and write it to the audit log. The entry points build this path with ``open_sql_tools``, so that it
-is assembled in one place.
+and write it to the audit log. Both entry points, the api (``main.py``) and the MCP server
+(``mcp/__main__.py``), build this path with ``open_sql_tools``, so that it is assembled in one place.
 """
 
 from __future__ import annotations

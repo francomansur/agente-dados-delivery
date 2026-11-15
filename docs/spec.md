@@ -5,9 +5,9 @@
 
 ## 1. Visão geral
 
-**O que é:** uma API que responde, em português, perguntas de negócio sobre a base fictícia de um marketplace de delivery. Para cada pergunta, o agente gera um SQL, valida, executa no Postgres com um usuário somente leitura e responde com as linhas usadas. O SQL e os outros detalhes técnicos vêm quando pedidos (API-05).
+**O que é:** uma API que responde, em português, perguntas de negócio sobre a base fictícia de um marketplace de delivery. Para cada pergunta, o agente gera um SQL, valida, executa no Postgres com um usuário somente leitura e responde com as linhas usadas. O SQL e os outros detalhes técnicos vêm quando pedidos (API-05). O mesmo acesso ao banco também fica disponível como um servidor MCP somente leitura (EXT-02), para o Claude e outros clientes MCP.
 
-**Stack:** Python 3.12, LangGraph (fluxo), FastAPI (API), SDK oficial `anthropic` com o Claude Haiku 5.5, PostgreSQL em Docker Compose, psycopg 3, sqlglot, pytest, ruff e mypy. A interface web usa HTML, CSS e JavaScript puros.
+**Stack:** Python 3.12, LangGraph (fluxo), FastAPI (API), SDK oficial `mcp` (servidor MCP), SDK oficial `anthropic` com o Claude Haiku 5.5, PostgreSQL em Docker Compose, psycopg 3, sqlglot, pytest, ruff e mypy. A interface web usa HTML, CSS e JavaScript puros.
 
 **Fora do escopo:**
 - escrita no banco, exceto o extra EXT-01;
@@ -22,6 +22,9 @@ flowchart LR
     API -->|"HTTPS"| LLM["Claude Haiku 5.5"]
     API -->|"agent_reader, somente leitura"| PG[("postgres: dados fictícios")]
     API --> LOG["logs/audit.jsonl"]
+    D["Claude Desktop ou Claude Code"] -->|"stdio"| MCP["servidor MCP"]
+    MCP -->|"agent_reader, somente leitura"| PG
+    MCP --> LOG
 ```
 
 ### 1.1 Qualidade de código
@@ -30,17 +33,18 @@ flowchart LR
 |----|-----------|
 | QLT-01 | Tipagem completa: `mypy --strict` sem erros em `src/` e `evals/`. |
 | QLT-02 | `ruff check` e `ruff format --check` limpos, com regras de estilo, imports, bugs comuns e docstrings no estilo Google. |
-| QLT-03 | Pydantic na entrada de `execute_sql` (e das ferramentas do MCP, se o extra entrar), nas saídas estruturadas do modelo e nas configurações, via pydantic-settings. |
+| QLT-03 | Pydantic na entrada de `execute_sql`, inclusive pelo MCP, nas saídas estruturadas do modelo e nas configurações, via pydantic-settings. |
 | QLT-04 | pytest com cobertura mínima de 85% em `src/`. |
-| QLT-05 | O código fica em camadas por responsabilidade, e as dependências vão num sentido só: `api` → `services` → (`repositories`, `llm`) → `core`. As rotas só tratam o HTTP, o repository só fala com o banco (não importa o validador nem a auditoria) e a montagem das peças fica fora das camadas: o `main.py` cria a API, e o acesso ao banco (pool somente leitura, auditoria e ferramentas de SQL) sai de uma função só, no `assembly.py`. |
+| QLT-05 | O código fica em camadas por responsabilidade, e as dependências vão num sentido só: `api` e `mcp` → `services` → (`repositories`, `llm`) → `core`. As rotas só tratam o HTTP, as ferramentas do MCP só traduzem a chamada e os erros, o repository só fala com o banco (não importa o validador nem a auditoria) e a montagem das peças fica nos pontos de entrada: o `main.py` cria a API, o `mcp/__main__.py` roda o servidor MCP, e os dois montam o acesso ao banco (pool somente leitura, auditoria e ferramentas de SQL) com a mesma função, do `assembly.py`. |
 
 ### 1.2 Estrutura
 
 ```
 src/delivery_agent/
   main.py             cria a API: monta as peças de cada camada e registra as rotas
-  assembly.py         monta o acesso ao banco: o pool somente leitura, a auditoria e as ferramentas de SQL
+  assembly.py         monta o acesso ao banco, para a API e o MCP: o pool somente leitura, a auditoria e as ferramentas de SQL
   api/                rotas HTTP
+  mcp/                servidor MCP: as ferramentas somente leitura (server.py) e o ponto de entrada (__main__.py)
   services/           casos de uso e regras: a pergunta, o fluxo do LangGraph, as ferramentas de SQL e o validador
   repositories/       acesso ao banco, só SQL
   llm/                cliente do modelo, prompts e preços
@@ -267,7 +271,7 @@ As perguntas que pedem um nome também pedem o número (por exemplo, "e de quant
 | ID | Requisito |
 |----|-----------|
 | EXT-01 | **Escrita segura com confirmação humana.** A ação "registrar uma avaliação" (nota e comentário para um pedido entregue que ainda não foi avaliado) funciona assim: o grafo prepara o `INSERT`, pausa com o interrupt do LangGraph e só grava depois de `POST /actions/{id}/approve`. A ação usa um papel próprio, `review_writer`, com `INSERT` só em `reviews`, e tudo vai para a auditoria. |
-| EXT-02 | **Servidor MCP** (SDK oficial) com `describe_schema` e `execute_sql` marcadas como somente leitura, e a ação de escrita marcada como destrutiva. |
+| EXT-02 | **Servidor MCP** (SDK oficial, pelo stdio, com `python -m delivery_agent.mcp`) com duas ferramentas, `describe_schema` e `execute_sql`, as duas marcadas como somente leitura. Elas chamam o mesmo `SQLTools` da API, sem acesso direto ao banco: validação da entrada, validador, usuário somente leitura e auditoria com `source` igual a `mcp`. Um SQL recusado ou com erro volta ao modelo do cliente como erro da ferramenta, com a mensagem em português. A ação de escrita (EXT-01) não é exposta. |
 
 ## 7. Rastreabilidade
 
@@ -309,4 +313,5 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 | EVA-04, EVA-08 | `test_eval_runner.py::test_infra_error_is_not_scored` e `test_asks_before_spending` |
 | EVA-06, EVA-07 | `test_eval_compare.py` |
 | RDM-01 a RDM-03 | Revisão do README antes de publicar |
-| EXT-01, EXT-02 | Testes próprios, se os extras entrarem |
+| EXT-01 | Testes próprios, se o extra entrar |
+| EXT-02 | `test_mcp.py`, com um cliente MCP ligado ao servidor: `test_only_the_two_read_only_tools_are_listed`, `test_execute_sql_refuses_writes_and_logs_them`, `test_describe_schema_returns_the_description_the_api_uses` (db) e `test_the_server_runs_on_stdio_from_another_folder` (db); e `test_layers.py::test_the_mcp_server_has_no_shortcut_to_the_database` |
