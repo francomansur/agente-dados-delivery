@@ -35,7 +35,7 @@ flowchart LR
 | QLT-02 | `ruff check` e `ruff format --check` limpos, com regras de estilo, imports, bugs comuns e docstrings no estilo Google. |
 | QLT-03 | Pydantic na entrada de `execute_sql`, inclusive pelo MCP, nas saídas estruturadas do modelo e nas configurações, via pydantic-settings. |
 | QLT-04 | pytest com cobertura mínima de 85% em `src/`. |
-| QLT-05 | O código fica em camadas por responsabilidade, e as dependências vão num sentido só: `api` e `mcp` → `services` → (`repositories`, `llm`) → `core`. As rotas só tratam o HTTP, as ferramentas do MCP só traduzem a chamada e os erros, o repository só fala com o banco (não importa o validador nem a auditoria) e a montagem das peças fica nos pontos de entrada: o `main.py` cria a API, o `mcp/__main__.py` roda o servidor MCP, e os dois montam o acesso ao banco (pool somente leitura, auditoria e ferramentas de SQL) com a mesma função, do `assembly.py`. |
+| QLT-05 | O código fica em camadas por responsabilidade, e as dependências vão num sentido só: `api` e `mcp` → `services` → (`repositories`, `llm`) → `core`. As rotas só tratam o HTTP, as ferramentas do MCP só traduzem a chamada e os erros, os repositories só falam com o banco (não importam o validador nem a auditoria) e a montagem das peças fica nos pontos de entrada: o `main.py` cria a API, o `mcp/__main__.py` roda o servidor MCP, e os dois montam o acesso ao banco (pool somente leitura, auditoria e ferramentas de SQL) com a mesma função, do `assembly.py`. |
 
 ### 1.2 Estrutura
 
@@ -45,8 +45,8 @@ src/delivery_agent/
   assembly.py         monta o acesso ao banco, para a API e o MCP: o pool somente leitura, a auditoria e as ferramentas de SQL
   api/                rotas HTTP
   mcp/                servidor MCP: as ferramentas somente leitura (server.py) e o ponto de entrada (__main__.py)
-  services/           casos de uso e regras: a pergunta, o fluxo do LangGraph, as ferramentas de SQL e o validador
-  repositories/       acesso ao banco, só SQL
+  services/           casos de uso e regras: a pergunta, o fluxo do LangGraph, as ferramentas de SQL, o validador e a ação de avaliação
+  repositories/       acesso ao banco, só SQL: a leitura e o único INSERT, o da avaliação aprovada
   llm/                cliente do modelo, prompts e preços
   core/               configurações, erros e auditoria
   web/                página para testar o agente: HTML, CSS e JavaScript

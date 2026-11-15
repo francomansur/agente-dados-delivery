@@ -57,19 +57,20 @@ def test_each_layer_imports_only_the_layers_below(layer: str) -> None:
     assert wrong == []
 
 
-def test_the_repository_imports_neither_the_validator_nor_the_audit_log() -> None:
-    imports = project_imports(PACKAGE / "repositories" / "delivery_repository.py")
+@pytest.mark.parametrize("name", ["delivery_repository.py", "review_repository.py"])
+def test_the_repositories_import_neither_the_validator_nor_the_audit_log(name: str) -> None:
+    imports = project_imports(PACKAGE / "repositories" / name)
 
     assert "delivery_agent.services.sql_validator" not in imports
     assert "delivery_agent.core.audit" not in imports
 
 
 def test_the_mcp_server_has_no_shortcut_to_the_database() -> None:
-    # Its tools reach Postgres only through the SQL tools: no repository and no database driver.
+    # Its tools reach Postgres only through the SQL tools: no repository, no database driver and no
+    # write action, which stays out of the MCP.
     imports = {module for path in (PACKAGE / "mcp").glob("*.py") for module in imported_modules(path)}
-    shortcuts = [
-        module for module in imports if module.startswith(("psycopg", "delivery_agent.repositories"))
-    ]
+    forbidden = ("psycopg", "delivery_agent.repositories", "delivery_agent.services.review_actions")
+    shortcuts = [module for module in imports if module.startswith(forbidden)]
 
     assert shortcuts == []
 
