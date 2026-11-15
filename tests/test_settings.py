@@ -47,3 +47,7 @@ def test_password_is_kept_secret() -> None:
 def test_password_is_required() -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_empty_api_key_means_missing() -> None:
+    assert Settings(_env_file=None, agent_db_password="x", anthropic_api_key="").anthropic_api_key is None

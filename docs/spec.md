@@ -191,7 +191,7 @@ flowchart TD
 | API-01 | `POST /questions` recebe `{"question": "..."}`, com 3 a 500 caracteres, e devolve `request_id`, `status` (`answered`, `refused` ou `failed`), `answer`, `sql`, `columns`, `rows`, `truncated`, `attempts`, `usage` (tokens e custo em US$) e `duration_ms`. |
 | API-02 | `GET /health` responde 200 quando a api e o banco respondem, e 503 quando o banco está fora. Não chama o modelo. |
 | API-03 | `/docs` documenta as rotas, com exemplos de pergunta e de resposta. |
-| API-04 | Sem a chave da Anthropic, `POST /questions` responde 503 com uma explicação. Um erro na API do modelo, depois das novas tentativas do SDK, vira 502. Uma pergunta inválida vira 422. |
+| API-04 | Sem a chave da Anthropic, `POST /questions` responde 503 com uma explicação, e com o banco fora do ar também. Um erro na API do modelo, depois das novas tentativas do SDK, vira 502. Uma pergunta inválida vira 422. |
 
 ## 4. Etapa 3: avaliação
 
