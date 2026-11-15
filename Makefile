@@ -1,4 +1,4 @@
-# Atalhos do dia a dia. No CI, rode com BIN= para usar as ferramentas do PATH.
+# Daily shortcuts. In the CI, run them with BIN= to use the tools on the PATH.
 BIN ?= .venv/bin/
 
 .PHONY: install db-up db-down db-reset lint format typecheck test check

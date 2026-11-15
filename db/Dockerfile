@@ -1,6 +1,6 @@
-# Postgres com a base fictícia carregada na primeira inicialização.
-# Estágio 1: o Python gera os CSVs. Estágio 2: o Postgres carrega schema, dados e papéis.
-# O contexto do build é a raiz do repositório (veja o docker-compose.yml).
+# Postgres with the fictional dataset, loaded on the first start.
+# Stage 1: Python generates the CSV files. Stage 2: Postgres loads the schema, the data and the roles.
+# The build context is the repository root (see docker-compose.yml).
 
 FROM python:3.12-slim AS seed
 WORKDIR /build

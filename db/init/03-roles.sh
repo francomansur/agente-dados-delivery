@@ -1,8 +1,8 @@
 #!/bin/sh
-# Papel somente leitura do agente (camadas 1 e 2 de segurança).
-# - agent_reader só lê as tabelas sem dados pessoais e a view customers_public;
-# - toda transação dele começa somente leitura, com tempo máximo de 5 s;
-# - set_config fica revogada, para uma consulta não conseguir desligar essas proteções.
+# Read-only role of the agent (security layers 1 and 2).
+# - agent_reader reads only the tables without personal data and the customers_public view;
+# - each of its transactions starts read-only, with a 5 s time limit;
+# - set_config is revoked, so a query cannot turn these protections off.
 set -eu
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \

@@ -1,5 +1,5 @@
--- Carrega os CSVs gerados no primeiro estágio da imagem (src/delivery_agent/seed.py).
--- Os CHECK do schema valem durante a carga: se um dado violar a integridade, a inicialização falha.
+-- Load the CSV files generated in the first stage of the image (src/delivery_agent/seed.py).
+-- The CHECK constraints apply during the load: if a row breaks them, initialization fails.
 
 COPY restaurants FROM '/seed/restaurants.csv' WITH (FORMAT csv, HEADER true);
 COPY customers FROM '/seed/customers.csv' WITH (FORMAT csv, HEADER true);

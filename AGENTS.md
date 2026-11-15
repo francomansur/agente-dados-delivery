@@ -23,7 +23,7 @@ Os testes marcados com `db` precisam do Postgres no ar. Sem ele, são pulados; n
 ## Idioma
 
 Uma língua por camada:
-- **Inglês nos identificadores:** pacote, módulos, classes, funções, variáveis, docstrings, mensagens de commit, tabelas, colunas, rotas e campos da API, variáveis de ambiente e códigos de status (`delivered`, `credit_card`, `invalid_format`).
+- **Inglês nos identificadores:** pacote, módulos, classes, funções, variáveis, docstrings, comentários em qualquer arquivo de código ou configuração, mensagens de commit, tabelas, colunas, rotas e campos da API, variáveis de ambiente e códigos de status (`delivered`, `credit_card`, `invalid_format`).
 - **Português no conteúdo para pessoas:** dados do negócio, respostas do agente, mensagens que chegam ao usuário ou ao modelo, README, spec, `docs/decisoes.md` e descrições de tabelas e colunas (`COMMENT ON`).
 
 O código escrito antes dessa regra, em português, foi convertido para inglês ao ser reaproveitado. O original continua no histórico do git.

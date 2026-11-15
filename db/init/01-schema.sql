@@ -1,5 +1,5 @@
--- Schema da base fictícia de um marketplace de delivery.
--- Identificadores em inglês. As descrições (COMMENT ON) ficam em português, porque são o que o agente lê.
+-- Schema of the fictional dataset of a food delivery marketplace.
+-- Identifiers are in English. The descriptions (COMMENT ON) are in Portuguese because the agent reads them.
 
 CREATE TABLE restaurants (
     id INTEGER PRIMARY KEY,
@@ -104,7 +104,7 @@ CREATE INDEX orders_created_at_idx ON orders (created_at);
 CREATE INDEX order_items_order_id_idx ON order_items (order_id);
 CREATE INDEX menu_items_restaurant_id_idx ON menu_items (restaurant_id);
 
--- O que o agente enxerga dos clientes: nada que identifique a pessoa.
+-- What the agent sees of the customers: nothing that identifies a person.
 CREATE VIEW customers_public AS
 SELECT id, neighborhood, city, signup_date, is_subscriber
 FROM customers;

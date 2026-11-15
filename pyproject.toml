@@ -59,7 +59,7 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
-markers = ["db: precisa do Postgres do Compose (make db-up)"]
+markers = ["db: needs the Postgres of the Compose (make db-up)"]
 
 [tool.coverage.run]
 source = ["delivery_agent"]
