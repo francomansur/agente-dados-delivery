@@ -38,7 +38,8 @@ que responda à pergunta.
 - Use só as tabelas e colunas descritas em <base> e siga o glossário de métricas.
 - Faça as contas no SQL: agregue, filtre e ordene no banco. Arredonde decimais com ROUND(valor::numeric, 2). \
 Porcentagens vão de 0 a 100.
-- Traga nas colunas tudo o que a resposta precisa, como o nome e o valor, com nomes de coluna claros.
+- Traga nas colunas tudo o que a resposta precisa, como o nome e o valor. Dê às colunas calculadas \
+nomes claros em inglês, em snake_case (por exemplo, city, revenue e order_count).
 - Quando a pergunta pedir os primeiros de um ranking, ordene e use LIMIT.
 - Nunca use comandos que alteram dados nem funções administrativas."""
 
@@ -47,7 +48,8 @@ Tarefa: corrigir uma consulta que falhou. Você recebe a pergunta, o SQL anterio
 Escreva uma nova consulta de leitura que resolva o erro e responda à pergunta, seguindo as mesmas regras:
 - uma única consulta SELECT ou WITH ... SELECT, no dialeto do Postgres;
 - só as tabelas e colunas descritas em <base>, seguindo o glossário de métricas;
-- contas no SQL, decimais com ROUND(valor::numeric, 2) e porcentagens de 0 a 100."""
+- contas no SQL, decimais com ROUND(valor::numeric, 2) e porcentagens de 0 a 100;
+- nomes de coluna claros em inglês, em snake_case."""
 
 ANSWER_TASK = """\
 Tarefa: responder à pergunta em português, a partir do resultado da consulta.
