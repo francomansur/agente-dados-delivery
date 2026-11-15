@@ -8,13 +8,25 @@ Guia para quem vai mexer neste repositório, seja pessoa ou agente de IA.
 - Se uma mudança altera um comportamento, atualize a spec e a prova no mesmo commit.
 - Decisões de arquitetura vão para o [`docs/decisoes.md`](docs/decisoes.md), com contexto e alternativas.
 
+## Comandos
+
+```bash
+make install            # cria o .venv e instala o projeto com as dependências de desenvolvimento
+cp .env.example .env    # depois, preencha as senhas
+make db-up              # sobe o Postgres com os dados fictícios (Docker)
+make check              # ruff, mypy e pytest com cobertura
+make db-reset           # recria o banco do zero, depois de mudar o schema ou o gerador
+```
+
+Os testes marcados com `db` precisam do Postgres no ar. Sem ele, são pulados; no CI, com `REQUIRE_DB=1`, falham.
+
 ## Idioma
 
 Uma língua por camada:
 - **Inglês nos identificadores:** pacote, módulos, classes, funções, variáveis, docstrings, mensagens de commit, tabelas, colunas, rotas e campos da API, variáveis de ambiente e códigos de status (`delivered`, `credit_card`, `invalid_format`).
 - **Português no conteúdo para pessoas:** dados do negócio, respostas do agente, mensagens que chegam ao usuário ou ao modelo, README, spec, `docs/decisoes.md` e descrições de tabelas e colunas (`COMMENT ON`).
 
-O código escrito antes dessa regra (`src/agente_delivery`) está em português e é convertido para inglês quando reaproveitado.
+O código escrito antes dessa regra, em português, foi convertido para inglês ao ser reaproveitado. O original continua no histórico do git.
 
 ## Estilo de código
 
