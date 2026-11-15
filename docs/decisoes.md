@@ -50,3 +50,16 @@ Registro curto das decisões do projeto: o contexto, o que foi decidido e as alt
   - manter o pacote sem camadas, mais curto, mas com responsabilidades misturadas;
   - um repository por tabela, que não serve quando quem escreve o SQL é o modelo;
   - deixar a montagem dos objetos em `api/routes.py`, que misturaria as rotas com as conexões e faria as rotas importarem todas as camadas.
+
+## 15/11/2026: interface web simples, sem framework
+
+- **Contexto:** o Franco queria testar o agente numa tela, além do `/docs` e do `curl`. O plano já tinha deixado o Gradio de fora.
+- **Decisão:** uma página só, servida pela própria API em `GET /`, com HTML, CSS e JavaScript puros em `src/delivery_agent/web/`, sem framework, sem build e sem nada de fora do servidor.
+  - Ela chama `POST /questions?include_details=true` com um `fetch` comum e mostra cada pergunta como um cartão: a resposta, a tabela e, sob demanda, o SQL, as tentativas, o tempo e o custo.
+  - A página não guarda conversa, porque o agente não tem memória, e uma dica embaixo do campo avisa isso.
+- **Visual:** o Franco pediu o estilo dos apps de delivery: vermelho, branco e cartões com cantos arredondados. A página não usa nome, logo nem fonte de nenhuma empresa. O vermelho é um pouco mais escuro que o habitual, para o texto branco dos botões manter o contraste mínimo de 4,5:1.
+- **Por quê:** a API já devolve tudo o que a tela precisa, e uma página estática não acrescenta dependência, etapa de build nem servidor. Sem recursos externos, ela funciona sem internet e tem uma política de segurança de conteúdo (CSP) que só aceita o próprio servidor.
+- **Alternativas:**
+  - Gradio ou Streamlit, rápidos de montar em Python, mas seriam um segundo app, e o plano tinha deixado o Gradio de fora;
+  - React com Vite, que exigiria Node e uma etapa de build para uma tela pequena;
+  - mostrar os passos do agente ao vivo, com SSE, que fica como extra para depois.

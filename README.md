@@ -40,7 +40,15 @@ No `.env`, preencha `ANTHROPIC_API_KEY`, `POSTGRES_PASSWORD` e `AGENT_DB_PASSWOR
 docker compose up -d --build --wait
 ```
 
-A API fica em `http://127.0.0.1:8000`, com a documentação interativa em `http://127.0.0.1:8000/docs`. O banco e a API só aceitam conexões da própria máquina.
+A interface para testar o agente fica em `http://127.0.0.1:8000`, e a documentação interativa da API em `http://127.0.0.1:8000/docs`. O banco e a API só aceitam conexões da própria máquina.
+
+## Interface web
+
+Abra `http://127.0.0.1:8000` no navegador e faça uma pergunta, ou clique num dos exemplos. Cada pergunta vira um cartão com a resposta e os dados, e o botão "Ver detalhes" mostra o SQL, as tentativas, o tempo e o custo:
+
+![Interface web com uma pergunta real respondida, a tabela dos dados e os detalhes abertos](docs/img/interface.png)
+
+A página fica em [`src/delivery_agent/web/`](src/delivery_agent/web/): HTML, CSS e JavaScript puros, servidos pela própria API, sem framework e sem build. Ela não guarda conversa, porque cada pergunta é respondida sozinha, e uma dica embaixo do campo avisa isso.
 
 ## Exemplo de chamada
 
@@ -129,6 +137,7 @@ O código em [`src/delivery_agent/`](src/delivery_agent/) fica em camadas, como 
 | Camada | Arquivos | Papel | No MVC |
 |--------|----------|-------|--------|
 | Montagem | `main.py` | Cria o app, monta as peças das outras camadas quando a api sobe e registra as rotas. É o único arquivo que conhece todas as camadas. | O container de injeção de dependência |
+| Interface | `web/` (`index.html`, `styles.css` e `app.js`) | A página para testar o agente, servida em `GET /`. Ela chama `POST /questions?include_details=true` e mostra a resposta, a tabela e os detalhes. | View |
 | Rotas | `api/routes.py` | Recebe o pedido HTTP, chama o service e traduz os erros em status (503 e 502). | Controller |
 | Serviços | `services/question_service.py`, `graph.py`, `sql_tools.py` e `sql_validator.py` | As regras: responder a pergunta, o fluxo do LangGraph, e passar o SQL do modelo pela validação da entrada, pelo validador, pelo banco e pela auditoria. | Service |
 | Repositório | `repositories/delivery_repository.py` | Só fala com o banco: conexões somente leitura, execução de um SELECT e as consultas que descrevem as tabelas. | Repository |
@@ -136,7 +145,7 @@ O código em [`src/delivery_agent/`](src/delivery_agent/) fica em camadas, como 
 | Base | `core/settings.py`, `errors.py` e `audit.py` | Configurações, erros e auditoria, usados pelas outras camadas. | Configuração e utilitários |
 
 - **As dependências vão num sentido só:** rotas, depois serviços, depois repositório e modelo, depois a base. O teste [`tests/test_layers.py`](tests/test_layers.py) lê os imports e falha se uma camada usar outra acima dela.
-- **Não há View:** a API devolve JSON, e o formato da resposta é o modelo Pydantic `AgentAnswer`.
+- **A View é a página em `web/`,** que só conversa com a API por HTTP. A API devolve JSON, no formato dos modelos Pydantic `AgentAnswer` e `AnswerSummary`.
 - **O gerador dos dados** (`seed.py`) fica fora das camadas: a imagem do Postgres o roda sozinho, sem o resto do pacote.
 - **Há um repository só,** porque o SQL das perguntas é escrito pelo modelo: não existem consultas fixas por tabela, como em `OrderRepository`. O porquê está em [`docs/decisoes.md`](docs/decisoes.md).
 
