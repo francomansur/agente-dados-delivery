@@ -44,9 +44,9 @@ A interface para testar o agente fica em `http://127.0.0.1:8000`, e a documenta�
 
 ## Interface web
 
-Abra `http://127.0.0.1:8000` no navegador e faça uma pergunta, ou clique num dos exemplos. Cada pergunta vira um cartão com a resposta e os dados, e o botão "Ver detalhes" mostra o SQL, as tentativas, o tempo e o custo. Um pedido de avaliação mostra o que será gravado e os botões "Aprovar" e "Recusar" (veja [Escrita segura com aprovação humana](#escrita-segura-com-aprovação-humana)):
+Abra `http://127.0.0.1:8000` no navegador e faça uma pergunta, ou clique num dos exemplos. Cada pergunta vira um cartão com a resposta e os dados, e o botão "Ver detalhes" mostra o SQL, as tentativas, o tempo e o custo. Um pedido de avaliação mostra o que será gravado e os botões "Aprovar" e "Recusar" (veja [Escrita segura com aprovação humana](#escrita-segura-com-aprovação-humana)). No topo, o botão "Documentação da API" abre o `/docs` numa nova aba, sem perder as perguntas da página:
 
-![Interface web com uma pergunta real respondida, a tabela dos dados e os detalhes abertos](docs/img/interface.png)
+![Interface web com o botão da documentação da API no topo e uma pergunta real respondida, com a tabela dos dados e os detalhes abertos](docs/img/interface.png)
 
 A página fica em [`src/delivery_agent/web/`](src/delivery_agent/web/): HTML, CSS e JavaScript puros, servidos pela própria API, sem framework e sem build. Ela não guarda conversa, porque cada pergunta é respondida sozinha, e uma dica embaixo do campo avisa isso.
 
