@@ -19,10 +19,19 @@
         <rect x="14.25" y="11" width="3.5" height="13" rx="1.5" class="app-header__icon-bar"/>
         <rect x="19.5" y="7" width="3.5" height="17" rx="1.5" class="app-header__icon-accent"/>
       </svg>
-      <div>
+      <div class="app-header__text">
         <h1 class="app-header__title">Pergunte aos dados · Delivery</h1>
         <p class="app-header__subtitle">Um agente de IA responde, com SQL, sobre uma base fictícia de delivery</p>
       </div>
+      <!-- A new tab, so the questions already on the page are not lost. -->
+      <a class="app-header__docs" href="/docs" target="_blank" rel="noopener">
+        Documentação da API
+        <svg class="app-header__docs-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <path d="M7 3H4.5A1.5 1.5 0 0 0 3 4.5v7A1.5 1.5 0 0 0 4.5 13h7a1.5 1.5 0 0 0 1.5-1.5V9"/>
+          <path d="M10 3h3v3M13 3 7.5 8.5"/>
+        </svg>
+        <span class="visually-hidden">(abre em nova aba)</span>
+      </a>
     </div>
   </header>
 

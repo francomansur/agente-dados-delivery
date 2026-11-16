@@ -11,7 +11,7 @@
 
 **Fora do escopo:**
 - escrita no banco, exceto o extra EXT-01;
-- demo online: a interface web (WEB-01 a WEB-05) serve para testar o agente na máquina local;
+- demo online: a interface web (WEB-01 a WEB-06) serve para testar o agente na máquina local;
 - code mode;
 - autenticação na API, que roda só na máquina local;
 - conversa com memória: cada pergunta é independente.
@@ -230,6 +230,7 @@ flowchart TD
 | WEB-03 | O campo de pergunta fica embaixo, como num chat: Enter envia, e o campo fica desabilitado, com "Consultando os dados…", enquanto espera. Uma dica avisa que cada pergunta é respondida sozinha, sem memória das anteriores. A página traz de 4 a 6 perguntas de exemplo clicáveis, diferentes das da avaliação. |
 | WEB-04 | O visual segue o estilo dos apps de delivery (vermelho, branco e cartões com cantos arredondados), sem nome nem logo de empresa. A página funciona no celular e é acessível: campos com rótulo, uso pelo teclado e contraste de pelo menos 4,5:1 nos textos. |
 | WEB-05 | Num pedido de avaliação pendente (EXT-01), o cartão mostra o que será gravado (pedido, nota e comentário) e os botões "Aprovar" e "Recusar", que chamam `POST /actions/{action_id}/approve` ou `/reject`. Depois da decisão, os botões somem e o cartão mostra o resultado: gravada, descartada ou não gravada. Os erros 404 e 409 aparecem com a mensagem da API, e uma falha de rede deixa tentar de novo. |
+| WEB-06 | O topo da página tem o botão "Documentação da API", que abre o `/docs` (API-03) numa nova aba, para a conversa não se perder. Ele segue o visual do topo, em branco sobre o vermelho, e avisa aos leitores de tela que abre em nova aba. Em telas estreitas, fica embaixo do título. |
 
 ## 4. Etapa 3: avaliação
 
@@ -325,6 +326,7 @@ Os testes ficam em `tests/`. Os marcados com (db) rodam contra o Postgres do Com
 | WEB-01 | `test_web.py::test_the_page_is_served_at_the_root`, `test_the_static_files_load`, `test_the_page_asks_the_api_for_the_details` e `test_the_page_loads_nothing_from_other_sites` |
 | WEB-02 a WEB-04 | `test_web.py::test_the_examples_are_not_evaluation_questions` e revisão da tela no navegador, no computador e no celular, com o print do README |
 | WEB-05 | `test_web.py::test_a_pending_card_has_the_approval_buttons` e revisão no navegador de cada estado do cartão (pendente, gravada, descartada, 409, falha de rede e regra que bloqueia), no computador e no celular |
+| WEB-06 | `test_web.py::test_the_header_opens_the_api_docs_in_a_new_tab` e revisão no navegador, no computador e no celular, com o print do README |
 | EVA-01, EVA-03, EVA-05 | A rodada registrada em `evals/runs/` e no README |
 | EVA-02, EVA-09 | `test_eval_grading.py` |
 | EVA-04, EVA-08 | `test_eval_runner.py::test_infra_error_is_not_scored` e `test_asks_before_spending` |

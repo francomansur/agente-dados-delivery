@@ -51,6 +51,19 @@ def test_the_examples_are_not_evaluation_questions() -> None:
     assert not set(examples) & {case.question for case in CASES}
 
 
+def test_the_header_opens_the_api_docs_in_a_new_tab() -> None:
+    page = client.get("/").text
+    header = page[page.index("<header") : page.index("</header>")]
+    link = re.search(r'<a class="app-header__docs" ([^>]*)>(.*?)</a>', header, re.DOTALL)
+
+    assert link is not None
+    attributes = set(re.findall(r'\w+="[^"]*"', link.group(1)))
+    assert attributes == {'href="/docs"', 'target="_blank"', 'rel="noopener"'}
+    assert "Documentação da API" in link.group(2)
+    assert "(abre em nova aba)" in link.group(2)
+    assert client.get("/docs").status_code == 200
+
+
 def test_the_page_stays_out_of_the_api_docs() -> None:
     assert "/" not in client.get("/openapi.json").json()["paths"]
 
